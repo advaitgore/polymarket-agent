@@ -1,0 +1,98 @@
+{
+  "_meta": {
+    "description": "Dynamic weight table for theme-ticker mappings. Managed by adaptive_mapper.py. Higher weight = preferred primary ticker for that theme. Weights start at 1.0 (equal) and are adjusted based on realized P&L outcomes from trades.csv. Weights are normalized per theme before selection. Never drop below MIN_WEIGHT (0.1) or exceed MAX_WEIGHT (5.0).",
+    "version": "1.0",
+    "last_updated": "2026-03-16T21:58:46.902860+00:00",
+    "cycles_since_last_adapt": 0,
+    "adapt_every_n_cycles": 48,
+    "min_weight": 0.1,
+    "max_weight": 5.0,
+    "learning_rate": 0.15
+  },
+  "weights": {
+    "energy_oil_risk": {
+      "XLE": 1.0,
+      "XOP": 1.0,
+      "USO": 1.0,
+      "XOM": 1.0,
+      "CVX": 1.0
+    },
+    "defense_geopolitics": {
+      "LMT": 1.0,
+      "NOC": 1.0,
+      "RTX": 1.0
+    },
+    "us_elections_policy": {
+      "XLF": 1.0,
+      "XLI": 1.0,
+      "IWM": 1.0
+    },
+    "macro_fed_path": {
+      "TLT": 1.0,
+      "IEF": 1.0,
+      "QQQ": 1.0,
+      "XLF": 1.0
+    },
+    "tech_ai": {
+      "QQQ": 1.0,
+      "NVDA": 1.0,
+      "MSFT": 1.0,
+      "AAPL": 1.0,
+      "GOOGL": 1.0,
+      "META": 1.0,
+      "AMZN": 1.0
+    },
+    "crypto": {
+      "IBIT": 1.0,
+      "ETHA": 1.0
+    },
+    "us_politics_macro": {
+      "SPY": 1.0
+    },
+    "crypto_major": {
+      "ETHA": 1.0
+    }
+  },
+  "performance_log": [
+    {
+      "timestamp": "2026-03-15T20:18:36.291437+00:00",
+      "n_adjustments": 0,
+      "pnl_by_theme_ticker": {
+        "us_politics_macro/SPY": 0.0,
+        "defense_geopolitics/LMT": 0.0,
+        "crypto_major/ETHA": 0.0,
+        "tech_ai/QQQ": 0.0
+      },
+      "top_tickers_after": {
+        "energy_oil_risk": "XLE",
+        "defense_geopolitics": "LMT",
+        "us_elections_policy": "XLF",
+        "macro_fed_path": "TLT",
+        "tech_ai": "QQQ",
+        "crypto": "IBIT",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA"
+      }
+    },
+    {
+      "timestamp": "2026-03-16T21:58:46.902860+00:00",
+      "n_adjustments": 0,
+      "pnl_by_theme_ticker": {
+        "us_politics_macro/SPY": 0.0,
+        "defense_geopolitics/LMT": 0.0,
+        "crypto_major/ETHA": 0.0,
+        "tech_ai/QQQ": 0.0
+      },
+      "top_tickers_after": {
+        "energy_oil_risk": "XLE",
+        "defense_geopolitics": "LMT",
+        "us_elections_policy": "XLF",
+        "macro_fed_path": "TLT",
+        "tech_ai": "QQQ",
+        "crypto": "IBIT",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+
+# Pipeline runtime files
+pipeline/data/markets.db
+pipeline/data/price_history.db
+pipeline/logs/
+pipeline/main.pid
+*.log
+
+# Dashboard
+dashboard/node_modules/
+dashboard/dist/
+
+# OS
+.DS_Store
+Thumbs.db
