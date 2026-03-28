@@ -1,0 +1,24 @@
+Polymarket range: 2026-02-28 21:00:24+00:00 -> 2026-03-28 20:02:35+00:00
+Stock range:      2025-12-31 14:30:00+00:00 -> 2026-03-27 19:45:00+00:00
+Overlap:          2026-02-28 21:00:24+00:00 -> 2026-03-27 19:45:00+00:00
+
+Markets with >2pp 24h movement: 8
+
+  [OK] D= 48.5pp [energy_geopolitics  ] XLE   (score=1) pts= 674 overlap=True | Will Crude Oil (CL) hit (HIGH) $100 by end of March?
+  [OK] D= 22.0pp [defense_geopolitics ] LMT   (score=1) pts= 670 overlap=True | US x Iran ceasefire by March 31?
+  [OK] D=  6.7pp [us_politics_macro   ] SPY   (score=2) pts=  84 overlap=True | Will Trump nominate Kevin Warsh as the next Fed chair?
+  [OK] D=  4.4pp [us_politics_macro   ] SPY   (score=2) pts=  95 overlap=True | Will Trump nominate Judy Shelton as the next Fed chair?
+  [OK] D=  4.0pp [defense_geopolitics ] LMT   (score=2) pts= 632 overlap=True | Russia x Ukraine ceasefire by end of 2026?
+  [OK] D=  2.9pp [defense_geopolitics ] LMT   (score=2) pts= 598 overlap=True | Russia x Ukraine ceasefire by March 31, 2026?
+  [OK] D=  2.3pp [us_politics_macro   ] SPY   (score=1) pts= 663 overlap=True | Will Trump acquire Greenland before 2027?
+  [OK] D=  2.1pp [global_macro        ] TLT   (score=2) pts= 434 overlap=True | Will the Fed decrease interest rates by 25 bps after the Mar
+
+Tradable: 8
+  D= 48.5pp [energy_geopolitics  ] XLE   | Will Crude Oil (CL) hit (HIGH) $100 by end of March?
+  D= 22.0pp [defense_geopolitics ] LMT   | US x Iran ceasefire by March 31?
+  D=  6.7pp [us_politics_macro   ] SPY   | Will Trump nominate Kevin Warsh as the next Fed chair?
+  D=  4.4pp [us_politics_macro   ] SPY   | Will Trump nominate Judy Shelton as the next Fed chair?
+  D=  4.0pp [defense_geopolitics ] LMT   | Russia x Ukraine ceasefire by end of 2026?
+  D=  2.9pp [defense_geopolitics ] LMT   | Russia x Ukraine ceasefire by March 31, 2026?
+  D=  2.3pp [us_politics_macro   ] SPY   | Will Trump acquire Greenland before 2027?
+  D=  2.1pp [global_macro        ] TLT   | Will the Fed decrease interest rates by 25 bps after the Mar

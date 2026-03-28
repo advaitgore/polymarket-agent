@@ -27,7 +27,7 @@ LOG_FILE         = os.path.join(LOG_DIR, "system.log")
 POLYMARKET_BASE       = "https://gamma-api.polymarket.com"   # market metadata + prices
 POLYMARKET_CLOB       = "https://clob.polymarket.com"        # order-book prices
 FETCH_LIMIT           = 100     # markets per page
-PRICE_MOVE_THRESHOLD  = 5.0     # pp absolute move to flag as signal
+PRICE_MOVE_THRESHOLD  = 3.0     # pp absolute move to flag as signal (Optimized for 15m)
 
 # ── Simulated trade execution (no broker) ────────────────────────────────────
 # All trades are local simulations.  No network connection to any broker.
@@ -44,9 +44,9 @@ IBKR_ENABLED      = False   # permanently disabled; left as False sentinel only
 # Starting equity (USD).  Grows/shrinks with realized P&L each cycle.
 ACCOUNT_EQUITY_USD      = 1_000.0
 
-# Risk 1% of current equity per trade (≈ $10 on a $1 000 account).
+# Risk 2% of current equity per trade (≈ $20 on a $1 000 account).
 # Dollar amount risked = RISK_PCT * current_equity
-RISK_PCT                = 0.01
+RISK_PCT                = 0.02
 
 # Minimum risk‑reward ratio required before taking a trade.
 # Take‑profit must be ≥ RR_MIN × stop‑loss distance.
