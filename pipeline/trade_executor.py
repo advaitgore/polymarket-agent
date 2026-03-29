@@ -289,7 +289,7 @@ def determine_side(signal: Dict) -> str:
 
 def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
     """
-    Pick the highest-edge unexplained signal that:
+    Pick the highest-edge signal that:
       1. Is not already in an open position (same correlated instrument).
       2. Has a real stock price available from Yahoo Finance.
       3. Has enough room for a valid SL/TP (RR >= RR_MIN).
@@ -297,21 +297,20 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
     Returns None if nothing qualifies.
     """
     open_positions = load_open_positions()
-    unexplained = [
+    tradable = [
         s for s in signals
-        if not s.get("explained")
-        and s.get("trade_eligible", True)
+        if s.get("trade_eligible", True)
         and s.get("correlated_instrument", "NONE") != "NONE"
     ]
-    if not unexplained:
+    if not tradable:
         return None
-    unexplained.sort(key=lambda x: x.get("edge_score", 0), reverse=True)
+    tradable.sort(key=lambda x: x.get("edge_score", 0), reverse=True)
 
     equity       = current_equity()
     notional     = total_open_notional()
     max_notional = MAX_EXPOSURE_PCT * equity
 
-    for sig in unexplained:
+    for sig in tradable:
         symbol = sig["correlated_instrument"]
         if symbol in open_positions:
             continue

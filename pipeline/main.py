@@ -33,7 +33,6 @@ from config import POLL_INTERVAL_MINUTES, LOG_FILE, LOG_DIR
 from db_init import init_db, init_csv_files
 from fetch_markets import run_fetch_cycle
 from detect_signals import run_signal_detection, append_signals_to_csv
-from news_checker import enrich_signals_with_news
 from trade_executor import select_best_signal, place_paper_trade, update_mark_prices
 from adaptive_mapper import run_adaptive_mapping
 
@@ -188,21 +187,9 @@ def run_cycle(cycle_num: int, last_snapshot_count: int, run_adapt: bool = False)
     except Exception as e:
         logger.error(f"[2/6] Signal detection failed: {e}\n{traceback.format_exc()}")
 
-    # ── 3. News check (no API key needed) ────────────────────────────────
+    # ── 3. News check (Bypassed for Backtest Parity) ───────────────────────
     if signals:
-        try:
-            logger.info(f"[3/6] News check via public sources (no auth)...")
-            signals = enrich_signals_with_news(signals, max_checks=50)
-            n_explained   = sum(1 for s in signals if s.get("explained"))
-            n_unexplained = sum(1 for s in signals if not s.get("explained"))
-            n_unverified  = sum(1 for s in signals
-                                if s.get("news_check_method") == "unverified")
-            logger.info(
-                f"[3/6] Explained={n_explained}  Unexplained={n_unexplained}  "
-                f"Unverified(no-check)={n_unverified}"
-            )
-        except Exception as e:
-            logger.error(f"[3/6] News enrichment failed: {e}\n{traceback.format_exc()}")
+        logger.info("[3/6] Qualitative news check bypassed to enforce pure 15m mathematical backtest parity.")
     else:
         logger.info("[3/6] No signals to check")
 
@@ -213,13 +200,13 @@ def run_cycle(cycle_num: int, last_snapshot_count: int, run_adapt: bool = False)
     except Exception as e:
         logger.error(f"[4/6] CSV write failed: {e}")
 
-    # ── 5. Place best trade (IBKR paper, unexplained edges only) ─────────
+    # ── 5. Place best trade (Pure mathematical edges only) ─────────
     try:
         logger.info("[5/6] Evaluating trade opportunity...")
         best = select_best_signal(signals)
         if best:
             logger.info(
-                f"[5/6] Best unexplained edge: {best['market_name'][:60]} "
+                f"[5/6] Best mathematical edge: {best['market_name'][:60]} "
                 f"({best['correlated_instrument']}, edge={best['edge_score']:.2f})"
             )
             trade = place_paper_trade(best)
