@@ -112,7 +112,7 @@ export default function Dashboard() {
     queryKey: ["/api/price-history", selectedMarket?.id, selectedOutcome],
     queryFn: async () => {
       if (!selectedMarket) return [];
-      const r = await fetch(`/api/price-history?market_id=${encodeURIComponent(selectedMarket.id)}&outcome=${encodeURIComponent(selectedOutcome)}`);
+      const r = await fetch(`./api/price-history?market_id=${encodeURIComponent(selectedMarket.id)}&outcome=${encodeURIComponent(selectedOutcome)}`);
       return r.json();
     },
     enabled: !!selectedMarket,

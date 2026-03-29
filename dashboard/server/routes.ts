@@ -7,10 +7,10 @@ import type {
   MarketWithOutcomes, Signal, Trade, PricePoint, DashboardStats
 } from "@shared/schema";
 
-const DB_PATH = path.resolve("/home/user/workspace/polymarket_trader/data/markets.db");
-const SIGNALS_CSV = path.resolve("/home/user/workspace/polymarket_trader/data/signals.csv");
-const TRADES_CSV = path.resolve("/home/user/workspace/polymarket_trader/data/trades.csv");
-const LOG_FILE = path.resolve("/home/user/workspace/polymarket_trader/logs/system.log");
+const DB_PATH = path.resolve("/home/user/workspace/polymarket-agent-fresh/pipeline/data/markets.db");
+const SIGNALS_CSV = path.resolve("/home/user/workspace/polymarket-agent-fresh/pipeline/data/signals.csv");
+const TRADES_CSV = path.resolve("/home/user/workspace/polymarket-agent-fresh/pipeline/data/trades.csv");
+const LOG_FILE = path.resolve("/home/user/workspace/polymarket-agent-fresh/pipeline/logs/system.log");
 
 // ── CSV parse helper ─────────────────────────────────────────────────────────
 function parseCsv(filePath: string): any[] {
