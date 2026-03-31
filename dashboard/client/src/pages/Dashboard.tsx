@@ -99,7 +99,9 @@ export default function Dashboard() {
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<string>("Yes");
   const [minEdge, setMinEdge] = useState(0);
+  const [filterTradable, setFilterTradable] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [clockET, setClockET] = useState("");
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const statsQ = useQuery<Stats>({ queryKey: ["/api/stats"], refetchInterval: 30000 });
@@ -112,7 +114,7 @@ export default function Dashboard() {
     queryKey: ["/api/price-history", selectedMarket?.id, selectedOutcome],
     queryFn: async () => {
       if (!selectedMarket) return [];
-      const r = await fetch(`./api/price-history?market_id=${encodeURIComponent(selectedMarket.id)}&outcome=${encodeURIComponent(selectedOutcome)}`);
+      const r = await fetch(`/api/price-history?market_id=${encodeURIComponent(selectedMarket.id)}&outcome=${encodeURIComponent(selectedOutcome)}`);
       return r.json();
     },
     enabled: !!selectedMarket,
@@ -121,7 +123,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     const i = setInterval(() => setLastRefresh(new Date()), 30000);
-    return () => clearInterval(i);
+    // Live ET clock — updates every second
+    const tickET = () => {
+      const s = new Date().toLocaleTimeString("en-US", {
+        timeZone: "America/New_York",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+      setClockET(s);
+    };
+    tickET();
+    const clockI = setInterval(tickET, 1000);
+    return () => { clearInterval(i); clearInterval(clockI); };
   }, []);
 
   const stats = statsQ.data;
@@ -137,6 +152,7 @@ export default function Dashboard() {
     if (signalFilter === "unexplained" && s.explained !== 0) return false;
     if (signalFilter === "explained" && s.explained === 0) return false;
     if (s.edge_score < minEdge) return false;
+    if (filterTradable && s.trade_eligible === 0) return false;
     return true;
   });
   const openTrades = trades.filter(t => t.status === "OPEN");
@@ -202,7 +218,7 @@ export default function Dashboard() {
         </div>
 
         <div className="text-xs text-muted-foreground tabular">
-          {format(lastRefresh, "HH:mm:ss")}
+          {clockET} ET
         </div>
       </header>
 

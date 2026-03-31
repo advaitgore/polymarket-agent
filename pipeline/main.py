@@ -27,8 +27,6 @@ from datetime import datetime, timezone, timedelta
 import zoneinfo
 from typing import Optional
 
-sys.path.insert(0, "/home/user/workspace/polymarket_trader")
-
 from config import POLL_INTERVAL_MINUTES, LOG_FILE, LOG_DIR
 from db_init import init_db, init_csv_files
 from fetch_markets import run_fetch_cycle

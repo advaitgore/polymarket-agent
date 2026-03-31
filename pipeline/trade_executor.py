@@ -82,7 +82,7 @@ CSV_COLUMNS = [
 
 # ── In-memory stock price cache (refreshed each cycle call) ──────────────────
 _PRICE_CACHE: Dict[str, float] = {}
-_PRICE_CACHE_TS: float = 0.0
+_PRICE_CACHE_TS: Dict[str, float] = {}   # per-symbol timestamps
 _PRICE_CACHE_TTL: float = 60.0   # seconds before re-fetching
 
 
@@ -100,7 +100,8 @@ def get_stock_price(symbol: str) -> Optional[float]:
     global _PRICE_CACHE, _PRICE_CACHE_TS
 
     now = time.time()
-    if symbol in _PRICE_CACHE and (now - _PRICE_CACHE_TS) < _PRICE_CACHE_TTL:
+    # Per-symbol TTL check
+    if symbol in _PRICE_CACHE and (now - _PRICE_CACHE_TS.get(symbol, 0.0)) < _PRICE_CACHE_TTL:
         return _PRICE_CACHE[symbol]
 
     url = (
@@ -115,7 +116,7 @@ def get_stock_price(symbol: str) -> Optional[float]:
         price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
         price = float(price)
         _PRICE_CACHE[symbol] = price
-        _PRICE_CACHE_TS = now
+        _PRICE_CACHE_TS[symbol] = now
         logger.debug(f"Yahoo price {symbol}: ${price:.2f}")
         return price
     except Exception as e:
@@ -139,6 +140,7 @@ def get_stock_price_with_fallback(symbol: str) -> float:
             data = json.loads(resp.read())
         price = float(data["chart"]["result"][0]["meta"]["regularMarketPrice"])
         _PRICE_CACHE[symbol] = price
+        _PRICE_CACHE_TS[symbol] = time.time()
         return price
     except Exception:
         pass
@@ -152,9 +154,9 @@ def get_stock_price_with_fallback(symbol: str) -> float:
 
 
 def invalidate_price_cache():
-    """Force fresh price fetch on next call."""
+    """Force fresh price fetch on next call (all symbols)."""
     global _PRICE_CACHE_TS
-    _PRICE_CACHE_TS = 0.0
+    _PRICE_CACHE_TS = {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -306,9 +308,10 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
         return None
     tradable.sort(key=lambda x: x.get("edge_score", 0), reverse=True)
 
-    equity       = current_equity()
-    notional     = total_open_notional()
-    max_notional = MAX_EXPOSURE_PCT * equity
+    # Count-based cap: max MAX_OPEN_POSITIONS concurrent trades
+    if len(open_positions) >= MAX_OPEN_POSITIONS:
+        logger.info(f"Skip: position count cap reached ({len(open_positions)}/{MAX_OPEN_POSITIONS})")
+        return None
 
     for sig in tradable:
         symbol = sig["correlated_instrument"]
@@ -321,19 +324,11 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
             logger.debug(f"Skip {symbol}: could not fetch stock price")
             continue
 
-        sl_frac      = estimate_stock_volatility(symbol)
-        sl_dist      = entry * sl_frac
-        tp_dist      = sl_dist * RR_MIN
-        new_notional = entry * (RISK_PCT * equity / sl_dist) if sl_dist > 0 else 0
+        sl_frac = estimate_stock_volatility(symbol)
+        sl_dist = entry * sl_frac
 
         if sl_dist <= 0:
             logger.debug(f"Skip {symbol}: sl_dist=0")
-            continue
-        if notional + new_notional > max_notional:
-            logger.info(
-                f"Skip {symbol}: exposure cap — open=${notional:.2f} + "
-                f"new=${new_notional:.2f} > max=${max_notional:.2f}"
-            )
             continue
 
         return sig
@@ -387,18 +382,7 @@ def place_paper_trade(signal: Dict) -> Optional[Dict]:
     risk_dollar  = RISK_PCT * equity          # $10 on a $1,000 account
     qty_risk     = risk_dollar / sl_dist      # risk-based quantity
 
-    # Cap quantity so notional fits within remaining exposure room
-    open_notional = total_open_notional()
-    max_notional  = MAX_EXPOSURE_PCT * equity
-    remaining     = max_notional - open_notional
-    if remaining <= 0:
-        logger.info(
-            f"Trade skipped — exposure cap full: open=${open_notional:.2f} "
-            f">= max=${max_notional:.2f} (equity=${equity:.2f})"
-        )
-        return None
-    qty_cap  = remaining / entry
-    quantity = round(min(qty_risk, qty_cap), 6)  # fractional shares
+    quantity = round(qty_risk, 6)  # fractional shares, risk-sized only
 
     if quantity < 0.0001:
         logger.info(f"Trade skipped — quantity too small after exposure cap ({quantity:.6f})")
