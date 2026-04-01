@@ -47,8 +47,8 @@ logger = logging.getLogger("main")
 # ── Eastern timezone ───────────────────────────────────────────────────────────
 ET = zoneinfo.ZoneInfo("America/New_York")
 
-MARKET_OPEN_H,  MARKET_OPEN_M  = 7, 30   # 07:30 ET
-MARKET_CLOSE_H, MARKET_CLOSE_M = 18, 0   # 18:00 ET
+MARKET_OPEN_H,  MARKET_OPEN_M  = 9, 30   # 09:30 ET
+MARKET_CLOSE_H, MARKET_CLOSE_M = 16, 0   # 16:00 ET
 
 
 def now_et() -> datetime:

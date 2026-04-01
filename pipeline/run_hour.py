@@ -2,7 +2,7 @@
 Hourly driver script — launched by a host-level timer once per hour.
 
 Runs up to 4 pipeline cycles spaced 15 minutes apart, but only during
-US market hours (Mon–Fri 07:30–18:00 ET).  Exits after ~60 minutes
+US market hours (Mon–Fri 09:30–16:00 ET).  Exits after ~60 minutes
 so the next cron invocation takes over cleanly.
 
 This keeps individual sleeps to ≤15 minutes. The host timer is the clock;
@@ -32,8 +32,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_hour")
 
-MARKET_OPEN_H,  MARKET_OPEN_M  = 7, 30
-MARKET_CLOSE_H, MARKET_CLOSE_M = 18, 0
+MARKET_OPEN_H,  MARKET_OPEN_M  = 9, 30
+MARKET_CLOSE_H, MARKET_CLOSE_M = 16, 0
 INTERVAL_S = 15 * 60   # 15 minutes between cycles
 MAX_CYCLES = 4         # at most 4 cycles per hour-slot
 
