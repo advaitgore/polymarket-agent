@@ -208,6 +208,7 @@ def upsert_market(conn: sqlite3.Connection, market: Dict):
             category=excluded.category,
             end_date=excluded.end_date,
             volume_usd=excluded.volume_usd,
+            active=1,
             last_updated=excluded.last_updated
     """, (
         market_id,

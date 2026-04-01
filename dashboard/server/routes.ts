@@ -46,7 +46,7 @@ export function registerRoutes(server: any, app: Express) {
     };
 
     withDb(db => {
-      stats.total_markets = (db.prepare("SELECT COUNT(*) as c FROM markets WHERE active=1").get() as any).c;
+      stats.total_markets = (db.prepare("SELECT COUNT(*) as c FROM markets WHERE COALESCE(active, 1)=1").get() as any).c;
     });
 
     const signals = parseCsv(SIGNALS_CSV);
@@ -83,7 +83,7 @@ export function registerRoutes(server: any, app: Express) {
                o.outcome_name, o.current_price
         FROM markets m
         JOIN outcomes o ON m.id = o.market_id
-        WHERE m.active = 1
+        WHERE COALESCE(m.active, 1) = 1
         ORDER BY m.volume_usd DESC
         LIMIT ?
       `).all(limit * 2) as any[]; // *2 because each market has ~2 outcomes
