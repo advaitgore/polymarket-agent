@@ -19,7 +19,10 @@ logger = logging.getLogger("watchdog")
 
 PIPELINE_DIR = os.path.dirname(os.path.abspath(__file__))
 MAIN_SCRIPT = os.path.join(PIPELINE_DIR, "main.py")
-LOG_FILE = "/tmp/pipeline_v2.log"
+LOG_DIR = os.path.join(PIPELINE_DIR, "logs")
+LOG_FILE = os.path.join(LOG_DIR, "watchdog.log")
+
+os.makedirs(LOG_DIR, exist_ok=True)
 
 def run():
     restart_count = 0

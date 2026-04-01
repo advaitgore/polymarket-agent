@@ -2,10 +2,9 @@
 News and context checker — no external API key required.
 
 Priority order:
-  1. Perplexity Computer built-in search (via internal sandbox search endpoint)
-  2. Public RSS feeds (Reuters, AP, BBC) — unauthenticated
-  3. DuckDuckGo Instant Answer API — unauthenticated
-  4. Fallback: tag as "unverified (no news check)"
+    1. Public RSS feeds (Reuters, AP, BBC) — unauthenticated
+    2. DuckDuckGo Instant Answer API — unauthenticated
+    3. Fallback: tag as "unverified (no news check)"
 
 No PERPLEXITY_API_KEY or any other secret is needed. The system runs
 end-to-end without any user-provided credentials.
@@ -26,35 +25,7 @@ SESSION.headers.update({
     "Accept": "application/json, text/html, application/xml"
 })
 
-# ── 1. Perplexity Computer internal search ────────────────────────────────────
-# The Computer sandbox exposes its own search endpoint at a well-known path.
-# This requires no API key — it uses the platform's built-in capability.
-
-SANDBOX_SEARCH_URL = "http://localhost:8765/search"   # internal sandbox search
-
-def _search_sandbox(query: str) -> Optional[str]:
-    """Try the Computer sandbox's internal search endpoint (no auth needed)."""
-    try:
-        r = SESSION.post(
-            SANDBOX_SEARCH_URL,
-            json={"query": query, "max_results": 5},
-            timeout=10
-        )
-        if r.status_code == 200:
-            data = r.json()
-            snippets = []
-            for item in data.get("results", [])[:3]:
-                title = item.get("title", "")
-                snippet = item.get("snippet", item.get("body", ""))
-                if snippet:
-                    snippets.append(f"{title}: {snippet[:200]}")
-            if snippets:
-                return " | ".join(snippets)
-    except Exception:
-        pass
-    return None
-
-# ── 2. DuckDuckGo Instant Answer API (no key, no rate limit for low traffic) ──
+# ── 1. DuckDuckGo Instant Answer API (no key, no rate limit for low traffic) ──
 
 DDG_URL = "https://api.duckduckgo.com/"
 
@@ -82,7 +53,7 @@ def _search_duckduckgo(query: str) -> Optional[str]:
         logger.debug(f"DuckDuckGo search failed: {e}")
     return None
 
-# ── 3. Public RSS feeds (no auth) ────────────────────────────────────────────
+# ── 2. Public RSS feeds (no auth) ────────────────────────────────────────────
 
 RSS_FEEDS = [
     "https://feeds.reuters.com/reuters/topNews",
@@ -188,7 +159,7 @@ def check_news_for_signal(signal: Dict) -> Dict:
     Tags each signal with:
       - news_summary: text from best source found
       - explained: True/False
-      - news_check_method: 'sandbox_search' | 'duckduckgo' | 'rss' | 'unverified'
+            - news_check_method: 'duckduckgo' | 'rss' | 'unverified'
       - edge_score: adjusted based on explained status
     """
     market_name = signal["market_name"]
@@ -207,21 +178,14 @@ def check_news_for_signal(signal: Dict) -> Dict:
     method = "unverified"
 
     # ── Try each source in order ──────────────────────────────────────────
-    # 1. Sandbox internal search
-    text = _search_sandbox(search_query)
+    time.sleep(0.3)  # gentle rate limiting
+    text = _search_duckduckgo(search_query)
     if text:
-        method = "sandbox_search"
-    else:
-        # 2. DuckDuckGo
-        time.sleep(0.3)  # gentle rate limiting
-        text = _search_duckduckgo(search_query)
+        method = "duckduckgo"
+    elif keywords:
+        text = _search_rss(keywords)
         if text:
-            method = "duckduckgo"
-        elif keywords:
-            # 3. RSS scan
-            text = _search_rss(keywords)
-            if text:
-                method = "rss"
+            method = "rss"
 
     # ── Classify ──────────────────────────────────────────────────────────
     raw_score = signal["edge_score"]
@@ -287,8 +251,6 @@ def enrich_signals_with_news(signals: List[Dict], max_checks: int = 50) -> List[
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, "/home/user/workspace/polymarket_trader")
     logging.basicConfig(level=logging.INFO)
 
     test_signal = {

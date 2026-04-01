@@ -398,8 +398,6 @@ def append_signals_to_csv(signals: List[Dict]):
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, "/home/user/workspace/polymarket_trader")
     logging.basicConfig(level=logging.INFO)
     sigs = run_signal_detection()
     tradable = [s for s in sigs if s["trade_eligible"]]

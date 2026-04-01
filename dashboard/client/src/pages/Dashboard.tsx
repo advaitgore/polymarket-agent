@@ -901,10 +901,7 @@ export default function Dashboard() {
         <span className="text-xs text-muted-foreground">
           15 min (market hours ET 07:30–18:00) · 60 min off-hours · Simulated paper trades · {DB_PATH_DISPLAY}
         </span>
-        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer"
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-          Created with Perplexity Computer
-        </a>
+        <span className="text-xs text-muted-foreground">Hetzner VPS deployment</span>
       </footer>
     </div>
   );

@@ -250,8 +250,6 @@ def get_current_primary_tickers() -> Dict[str, str]:
     return result
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, "/home/user/workspace/polymarket_trader")
     logging.basicConfig(level=logging.INFO)
     updated = run_adaptive_mapping(force=True)
     print(f"Weight update ran: {updated}")

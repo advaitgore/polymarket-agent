@@ -1,13 +1,12 @@
 """
-Hourly driver script — spawned by schedule_cron once per hour.
+Hourly driver script — launched by a host-level timer once per hour.
 
 Runs up to 4 pipeline cycles spaced 15 minutes apart, but only during
 US market hours (Mon–Fri 07:30–18:00 ET).  Exits after ~60 minutes
 so the next cron invocation takes over cleanly.
 
-This keeps individual sleeps to ≤15 minutes, which the sandbox handles
-reliably.  The cron is the clock; this script is just the within-hour
-executor.
+This keeps individual sleeps to ≤15 minutes. The host timer is the clock;
+this script is just the within-hour executor.
 """
 import subprocess
 import sys

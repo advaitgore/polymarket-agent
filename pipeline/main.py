@@ -1,14 +1,12 @@
 """
 Single-shot pipeline runner for the Polymarket Trading System.
 
-This script runs ONE cycle and exits.  It is driven externally by
-schedule_cron (the Perplexity Computer scheduler) which fires it every
-15 minutes during US market hours (Mon–Fri 07:30–18:00 ET) and once per
-hour off-hours.  There is no internal sleep loop — the sandbox scheduler
-is the clock.
+This script runs ONE cycle and exits. It is intended to be launched by a
+host-level timer or service on the VPS, while the script itself enforces
+the market-hours rules.
 
-No external API keys or secrets are needed.  Everything runs in the
-Perplexity Computer sandbox and writes to the sandbox filesystem only:
+No external API keys or secrets are needed. Everything writes to the local
+repo checkout on the host:
   data/markets.db   — SQLite snapshot of ~500 active markets + time series
   data/signals.csv  — signal feed with edge scores and explained/unexplained flags
   data/trades.csv   — simulated paper trades (no broker connectivity)

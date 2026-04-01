@@ -1,14 +1,14 @@
 """
 Central configuration for the Polymarket Trading System.
 
-All data files live entirely inside the Perplexity Computer sandbox filesystem:
-  data/markets.db  — SQLite (local to sandbox, NOT on the user's machine)
+All data files live inside the repository checkout on the host:
+  data/markets.db  — SQLite snapshot of the current market state
   data/signals.csv — signal feed
   data/trades.csv  — simulated paper trades (no broker connectivity)
 
 No external API keys or secrets are required to run the pipeline.
 
-IMPORTANT: This system runs entirely in the Perplexity Computer sandbox.
+IMPORTANT: This system is designed to run on a host like Hetzner.
 There is NO connection to IBKR, TWS, IB Gateway, or any broker API.
 All trade execution is local simulation only.
 """

@@ -42,7 +42,9 @@ Python pipeline that runs every 15 minutes during US market hours (Mon–Fri 07:
 ### Key Files
 | File | Purpose |
 |---|---|
-| `main.py` | Orchestration loop + scheduler |
+| `main.py` | Single-shot pipeline cycle |
+| `run_hour.py` | Hourly driver for external schedulers |
+| `watchdog.py` | Always-on wrapper that restarts the pipeline if it dies |
 | `fetch_markets.py` | Polymarket Gamma API fetcher |
 | `detect_signals.py` | Signal classification (theme + tradability) |
 | `trade_executor.py` | Position sizing + Yahoo Finance prices |
@@ -59,6 +61,18 @@ cd pipeline
 pip install requests pandas
 python main.py
 ```
+
+`main.py` runs one cycle and exits. For an always-on local worker, keep
+`watchdog.py` running in a separate terminal or background task:
+
+```bash
+cd pipeline
+python watchdog.py
+```
+
+If you prefer external scheduling, `run_hour.py` is a short-lived hourly
+driver that can be launched by Task Scheduler, cron, or another host-level
+timer.
 
 ## Dashboard (`dashboard/`)
 
@@ -80,8 +94,8 @@ NODE_ENV=production node dist/index.cjs
 
 ## Data Files
 
-- `data/signals.csv` and `data/trades.csv` live in the pipeline sandbox only
-- `data/markets.db` — SQLite, excluded from repo (regenerated on first run)
+- `pipeline/data/signals.csv` and `pipeline/data/trades.csv` are generated on the host
+- `pipeline/data/markets.db` — SQLite, excluded from repo (regenerated on first run)
 
 ## No External Secrets Required
 

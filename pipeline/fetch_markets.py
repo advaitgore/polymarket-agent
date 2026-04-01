@@ -285,8 +285,6 @@ def run_fetch_cycle():
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, "/home/user/workspace/polymarket_trader")
     logging.basicConfig(level=logging.INFO)
     results = run_fetch_cycle()
     print(f"Fetched {len(results)} outcomes across all markets.")

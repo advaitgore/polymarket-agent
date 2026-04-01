@@ -7,10 +7,12 @@ import type {
   MarketWithOutcomes, Signal, Trade, PricePoint, DashboardStats
 } from "@shared/schema";
 
-const DB_PATH = path.resolve("/home/user/workspace/polymarket-agent-v2/pipeline/data/markets.db");
-const SIGNALS_CSV = path.resolve("/home/user/workspace/polymarket-agent-v2/pipeline/data/signals.csv");
-const TRADES_CSV = path.resolve("/home/user/workspace/polymarket-agent-v2/pipeline/data/trades.csv");
-const LOG_FILE = path.resolve("/home/user/workspace/polymarket-agent-v2/pipeline/logs/system.log");
+const PROJECT_ROOT = path.resolve(process.cwd(), "..");
+const PIPELINE_DIR = path.resolve(PROJECT_ROOT, "pipeline");
+const DB_PATH = path.resolve(PIPELINE_DIR, "data", "markets.db");
+const SIGNALS_CSV = path.resolve(PIPELINE_DIR, "data", "signals.csv");
+const TRADES_CSV = path.resolve(PIPELINE_DIR, "data", "trades.csv");
+const LOG_FILE = path.resolve(PIPELINE_DIR, "logs", "system.log");
 
 // ── CSV parse helper ─────────────────────────────────────────────────────────
 function parseCsv(filePath: string): any[] {
@@ -254,11 +256,9 @@ export function registerRoutes(server: any, app: Express) {
 
   // ── GET /api/log ────────────────────────────────────────────────────────────
   app.get("/api/log", (_req, res) => {
-    // Try primary log file first, fall back to nohup stdout log
-    const FALLBACK_LOG = "/tmp/pipeline_v2.log";
     const logPath = (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 0)
       ? LOG_FILE
-      : (fs.existsSync(FALLBACK_LOG) ? FALLBACK_LOG : null);
+      : null;
     if (!logPath) return res.json({ log: "Log file not found yet." });
     const lines = fs.readFileSync(logPath, "utf-8").split("\n").slice(-60).join("\n");
     res.json({ log: lines });
