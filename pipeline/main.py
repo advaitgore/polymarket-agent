@@ -279,8 +279,17 @@ def main():
                 nxt_display = nxt.strftime('%A %Y-%m-%d %H:%M ET')
                 reason = "weekend — sleeping until Monday open" if not is_weekday() else "after close — sleeping until next open"
             logger.info(f"Sleeping {wait}s ({wait//3600}h {(wait%3600)//60}m) — next run: {nxt_display} [{reason}]")
+            # Sleep in 60-second chunks so the sandbox never blocks for hours
+            # and we always wake up close to the intended time.
             try:
-                time.sleep(wait)
+                slept = 0
+                while slept < wait:
+                    chunk = min(60, wait - slept)
+                    time.sleep(chunk)
+                    slept += chunk
+                    # Early exit if we're now inside market hours
+                    if is_market_hours():
+                        break
             except KeyboardInterrupt:
                 logger.info("Interrupted — shutting down")
                 break
