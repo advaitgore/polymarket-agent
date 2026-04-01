@@ -281,14 +281,17 @@ def main():
             logger.info(f"Sleeping {wait}s ({wait//3600}h {(wait%3600)//60}m) — next run: {nxt_display} [{reason}]")
             # Sleep in 60-second chunks so the sandbox never blocks for hours
             # and we always wake up close to the intended time.
+            # Only break early if we started outside market hours and just entered them
+            # (avoids firing every 60s when already inside market hours).
+            started_outside = not is_market_hours()
             try:
                 slept = 0
                 while slept < wait:
                     chunk = min(60, wait - slept)
                     time.sleep(chunk)
                     slept += chunk
-                    # Early exit if we're now inside market hours
-                    if is_market_hours():
+                    # Early exit only when transitioning INTO market hours
+                    if started_outside and is_market_hours():
                         break
             except KeyboardInterrupt:
                 logger.info("Interrupted — shutting down")
