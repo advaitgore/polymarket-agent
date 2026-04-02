@@ -80,6 +80,61 @@ CSV_COLUMNS = [
     "execution_venue", "broker", "status", "theme",
 ]
 
+
+def _normalize_trades_df(df: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+    """Bring any legacy trades.csv layout up to the canonical column set."""
+    changed = False
+
+    for column in CSV_COLUMNS:
+        if column not in df.columns:
+            changed = True
+            if column == "status":
+                df[column] = "OPEN"
+            elif column == "execution_venue":
+                df[column] = EXECUTION_VENUE
+            elif column == "broker":
+                df[column] = BROKER
+            elif column == "theme":
+                df[column] = "unclassified"
+            elif column == "open_date" and "timestamp" in df.columns:
+                df[column] = df["timestamp"]
+            else:
+                df[column] = ""
+
+    df = df.reindex(columns=CSV_COLUMNS, fill_value="")
+
+    if "status" in df.columns:
+        df["status"] = df["status"].fillna("OPEN").replace("", "OPEN")
+    for column, default in (("execution_venue", EXECUTION_VENUE), ("broker", BROKER), ("theme", "unclassified")):
+        if column in df.columns:
+            df[column] = df[column].fillna(default).replace("", default)
+
+    return df, changed
+
+
+def _load_trades_df(normalize: bool = True) -> pd.DataFrame:
+    if not os.path.exists(TRADES_CSV):
+        return pd.DataFrame(columns=CSV_COLUMNS)
+
+    try:
+        df = pd.read_csv(TRADES_CSV)
+    except Exception as e:
+        logger.warning(f"Could not read trades.csv: {e}")
+        return pd.DataFrame(columns=CSV_COLUMNS)
+
+    if df.empty:
+        return df.reindex(columns=CSV_COLUMNS, fill_value="")
+
+    df, changed = _normalize_trades_df(df)
+    if changed and normalize:
+        try:
+            df.to_csv(TRADES_CSV, index=False)
+            logger.warning("Normalized legacy trades.csv schema to include status and canonical columns")
+        except Exception as e:
+            logger.warning(f"Could not rewrite normalized trades.csv: {e}")
+
+    return df
+
 # ── In-memory stock price cache (refreshed each cycle call) ──────────────────
 _PRICE_CACHE: Dict[str, float] = {}
 _PRICE_CACHE_TS: Dict[str, float] = {}   # per-symbol timestamps
@@ -169,10 +224,8 @@ def current_equity() -> float:
       ACCOUNT_EQUITY_USD + sum(realized_pnl for all CLOSED rows)
     Returns ACCOUNT_EQUITY_USD if trades.csv is empty or missing.
     """
-    if not os.path.exists(TRADES_CSV):
-        return ACCOUNT_EQUITY_USD
     try:
-        df = pd.read_csv(TRADES_CSV)
+        df = _load_trades_df(normalize=True)
         if df.empty or "realized_pnl" not in df.columns:
             return ACCOUNT_EQUITY_USD
         closed = df[df["status"] == "CLOSED"]
@@ -187,10 +240,8 @@ def current_equity() -> float:
 
 def total_open_notional() -> float:
     """Sum of mark_price * quantity for all OPEN rows."""
-    if not os.path.exists(TRADES_CSV):
-        return 0.0
     try:
-        df = pd.read_csv(TRADES_CSV)
+        df = _load_trades_df(normalize=True)
         if df.empty:
             return 0.0
         open_df = df[df["status"] == "OPEN"]
@@ -267,10 +318,8 @@ def estimate_stock_volatility(symbol: str) -> float:
 
 def load_open_positions() -> Dict[str, Dict]:
     """Returns {symbol: trade_row_dict} for all OPEN rows."""
-    if not os.path.exists(TRADES_CSV):
-        return {}
     try:
-        df = pd.read_csv(TRADES_CSV)
+        df = _load_trades_df(normalize=True)
         if df.empty:
             return {}
         open_df = df[df["status"] == "OPEN"]
@@ -445,9 +494,20 @@ def place_paper_trade(signal: Dict) -> Optional[Dict]:
 def _append_trade_row(trade: Dict):
     """Append one trade dict to trades.csv, creating the file+header if needed."""
     file_exists = os.path.exists(TRADES_CSV)
+    
+    needs_header = True
+    if file_exists:
+        try:
+            with open(TRADES_CSV, "r") as f:
+                first_line = f.readline()
+                if "trade_id" in first_line:
+                    needs_header = False
+        except Exception:
+            pass
+
     with open(TRADES_CSV, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore")
-        if not file_exists or os.path.getsize(TRADES_CSV) == 0:
+        if needs_header:
             writer.writeheader()
         writer.writerow(trade)
 
@@ -466,12 +526,8 @@ def update_mark_prices():
 
     No broker connection is made.  All prices come from Yahoo Finance public API.
     """
-    if not os.path.exists(TRADES_CSV):
-        logger.info("No trades.csv yet — nothing to mark")
-        return
-
     try:
-        df = pd.read_csv(TRADES_CSV)
+        df = _load_trades_df(normalize=True)
     except Exception as e:
         logger.warning(f"Could not read trades.csv: {e}")
         return
