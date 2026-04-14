@@ -28,6 +28,11 @@ POLYMARKET_BASE       = "https://gamma-api.polymarket.com"   # market metadata +
 POLYMARKET_CLOB       = "https://clob.polymarket.com"        # order-book prices
 FETCH_LIMIT           = 100     # markets per page
 PRICE_MOVE_THRESHOLD  = 3.0     # pp absolute move to flag as signal (Optimized for 15m)
+# Guard against cold-start false positives when the DB has very fresh history.
+MIN_HISTORY_HOURS_FOR_SIGNAL = 12.0
+
+# Cooldown to avoid repeatedly trading the same market-side signal every cycle.
+MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
 
 # ── Simulated trade execution (no broker) ────────────────────────────────────
 # All trades are local simulations.  No network connection to any broker.
@@ -79,7 +84,16 @@ POLL_INTERVAL_MINUTES         = MARKET_HOURS_INTERVAL_MINUTES  # legacy alias
 # Uses public, unauthenticated sources only (DuckDuckGo API, public RSS feeds).
 # No API key is needed or used.  When no source is reachable, signals are tagged
 # as "unverified (no news check)" rather than failing silently.
+NEWS_CHECK_ENABLED = False
 NEWS_CHECK_MAX_PER_CYCLE = 50   # cap per cycle to keep runtime reasonable
+
+# ── Adaptive mapper controls ────────────────────────────────────────────────
+# Disable adaptive routing while hardening live-vs-backtest parity.
+ADAPTIVE_MAPPING_ENABLED = False
+
+# Require a minimum number of closed trades for each (theme, ticker)
+# before applying adaptive weight updates.
+ADAPTIVE_MIN_CLOSED_TRADES_PER_THEME_TICKER = 5
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 LOG_LEVEL = "INFO"

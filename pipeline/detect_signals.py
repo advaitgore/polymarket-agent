@@ -25,7 +25,7 @@ from typing import List, Dict, Optional, Tuple
 
 from config import (
     DB_PATH, SIGNALS_CSV, CORRELATIONS_JSON,
-    PRICE_MOVE_THRESHOLD
+    PRICE_MOVE_THRESHOLD, MIN_HISTORY_HOURS_FOR_SIGNAL
 )
 
 logger = logging.getLogger(__name__)
@@ -245,40 +245,119 @@ def find_instrument(market_question: str) -> Tuple[str, str, str]:
     return instrument, direction, theme
 
 
+def _parse_db_timestamp(raw_ts: str) -> Optional[datetime]:
+    """Parse SQLite timestamp strings into UTC-aware datetimes."""
+    try:
+        ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc)
+
+
+def estimate_hours_since_move(
+    conn: sqlite3.Connection,
+    market_id: str,
+    outcome_name: str,
+    old_price: float,
+    now_utc: datetime,
+) -> float:
+    """
+    Estimate signal recency by finding the first timestamp in the last 24h
+    where the absolute move from the anchor price crosses the threshold.
+    """
+    rows = conn.execute(
+        """
+        SELECT price, timestamp FROM price_history
+        WHERE market_id=? AND outcome_name=? AND timestamp >= ?
+        ORDER BY timestamp ASC
+        """,
+        (market_id, outcome_name, (now_utc - timedelta(hours=24)).isoformat()),
+    ).fetchall()
+
+    if not rows:
+        return 24.0
+
+    first_cross_ts: Optional[datetime] = None
+    for price, ts_raw in rows:
+        ts = _parse_db_timestamp(ts_raw)
+        if ts is None:
+            continue
+        if abs((float(price) - old_price) * 100.0) >= PRICE_MOVE_THRESHOLD:
+            first_cross_ts = ts
+            break
+
+    if first_cross_ts is None:
+        # Fallback to the freshest sample age if no threshold cross could be resolved.
+        latest_ts = None
+        for _, ts_raw in reversed(rows):
+            latest_ts = _parse_db_timestamp(ts_raw)
+            if latest_ts is not None:
+                break
+        if latest_ts is None:
+            return 24.0
+        return max(0.0, (now_utc - latest_ts).total_seconds() / 3600.0)
+
+    return max(0.0, (now_utc - first_cross_ts).total_seconds() / 3600.0)
+
+
 # ── Compute 24h delta ─────────────────────────────────────────────────────────
 
 def get_24h_delta(
     conn: sqlite3.Connection,
     market_id: str,
     outcome_name: str,
-) -> Tuple[Optional[float], Optional[float]]:
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+) -> Tuple[Optional[float], Optional[float], Optional[datetime]]:
+    now_utc = datetime.now(timezone.utc)
+    cutoff = (now_utc - timedelta(hours=24)).isoformat()
 
     row = conn.execute(
         "SELECT current_price FROM outcomes WHERE market_id=? AND outcome_name=?",
         (market_id, outcome_name)
     ).fetchone()
     if not row:
-        return None, None
+        return None, None, None
     current_price = row[0]
 
     old_row = conn.execute("""
-        SELECT price FROM price_history
+        SELECT price, timestamp FROM price_history
         WHERE market_id=? AND outcome_name=? AND timestamp < ?
         ORDER BY timestamp DESC LIMIT 1
     """, (market_id, outcome_name, cutoff)).fetchone()
 
-    if not old_row:
-        snap = conn.execute("""
-            SELECT price FROM price_history
-            WHERE market_id=? AND outcome_name=?
-            ORDER BY timestamp ASC LIMIT 1
-        """, (market_id, outcome_name)).fetchone()
-        if snap:
-            return snap[0], current_price
-        return current_price, current_price
+    if old_row:
+        old_ts = _parse_db_timestamp(old_row[1])
+        if old_ts is None:
+            return None, None, None
+        return old_row[0], current_price, old_ts
 
-    return old_row[0], current_price
+    # Cold-start path: no 24h-old data exists yet. We allow a fallback anchor
+    # only when the overall history age is old enough to be meaningful.
+    snap = conn.execute("""
+        SELECT price, timestamp FROM price_history
+        WHERE market_id=? AND outcome_name=?
+        ORDER BY timestamp ASC LIMIT 1
+    """, (market_id, outcome_name)).fetchone()
+    if not snap:
+        return None, None, None
+
+    snap_ts = _parse_db_timestamp(snap[1])
+    if snap_ts is None:
+        return None, None, None
+
+    history_age_hours = (now_utc - snap_ts).total_seconds() / 3600.0
+    if history_age_hours < MIN_HISTORY_HOURS_FOR_SIGNAL:
+        logger.debug(
+            "SKIP [insufficient_history]: market=%s outcome=%s age=%.2fh (< %.2fh)",
+            market_id,
+            outcome_name,
+            history_age_hours,
+            MIN_HISTORY_HOURS_FOR_SIGNAL,
+        )
+        return None, None, None
+
+    return snap[0], current_price, snap_ts
 
 
 # ── Edge score ────────────────────────────────────────────────────────────────
@@ -288,13 +367,11 @@ def compute_edge_score(
     hours_since_move: float = 12.0,
     explained: bool = False,
 ) -> float:
-    base      = abs(prob_change_pp) / 5.0
-    recency   = 1.5 if hours_since_move <= 6 else (1.2 if hours_since_move <= 12 else 1.0)
+    base = abs(prob_change_pp) / 5.0
+    recency = 1.5 if hours_since_move <= 6 else (1.2 if hours_since_move <= 12 else 1.0)
     news_mult = 0.3 if explained else 1.5
     return round(base * recency * news_mult, 3)
 
-
-# ── Main signal detection ─────────────────────────────────────────────────────
 
 def run_signal_detection() -> List[Dict]:
     """
@@ -305,6 +382,8 @@ def run_signal_detection() -> List[Dict]:
     """
     logger.info("=== Running signal detection (v3 — economic relevance filter) ===")
     conn = sqlite3.connect(DB_PATH)
+
+    now_utc = datetime.now(timezone.utc)
 
     markets = conn.execute(
         "SELECT id, question FROM markets WHERE active=1"
@@ -320,7 +399,7 @@ def run_signal_detection() -> List[Dict]:
         ).fetchall()
 
         for (outcome_name,) in outcomes:
-            old_price, new_price = get_24h_delta(conn, market_id, outcome_name)
+            old_price, new_price, anchor_ts = get_24h_delta(conn, market_id, outcome_name)
             if old_price is None or new_price is None:
                 continue
 
@@ -328,8 +407,20 @@ def run_signal_detection() -> List[Dict]:
             if abs(change_pp) < PRICE_MOVE_THRESHOLD:
                 continue
 
+            hours_since_move = estimate_hours_since_move(
+                conn,
+                market_id,
+                outcome_name,
+                old_price,
+                now_utc,
+            )
+
             theme, trade_eligible, instrument = classify_signal(question)
-            edge_score = compute_edge_score(change_pp)
+            edge_score = compute_edge_score(
+                change_pp,
+                hours_since_move=hours_since_move,
+                explained=False,
+            )
 
             signal = {
                 "market_id":            market_id,
@@ -345,21 +436,23 @@ def run_signal_detection() -> List[Dict]:
                 "explained":            False,
                 "news_summary":         "",
                 "news_check_method":    "unverified",
+                "hours_since_move":     round(hours_since_move, 2),
             }
             signals.append(signal)
 
             if trade_eligible:
                 n_eligible += 1
+                anchor_str = anchor_ts.isoformat() if anchor_ts else "n/a"
                 logger.info(
                     f"SIGNAL [TRADABLE]: {question[:60]} [{outcome_name}] "
                     f"{old_price*100:.1f}%→{new_price*100:.1f}% ({change_pp:+.1f}pp) "
-                    f"→ {instrument} [{theme}]"
+                    f"→ {instrument} [{theme}] | age={hours_since_move:.2f}h anchor={anchor_str}"
                 )
             else:
                 n_blocked += 1
                 logger.debug(
                     f"SIGNAL [NON-TRADABLE]: {question[:60]} [{outcome_name}] "
-                    f"({change_pp:+.1f}pp) [theme={theme}]"
+                    f"({change_pp:+.1f}pp) [theme={theme}] age={hours_since_move:.2f}h"
                 )
 
     conn.close()

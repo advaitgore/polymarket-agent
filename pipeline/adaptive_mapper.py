@@ -25,6 +25,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Dict, Tuple
 
+from config import ADAPTIVE_MIN_CLOSED_TRADES_PER_THEME_TICKER
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -57,16 +59,18 @@ def _save_weights_file(data: Dict):
 
 # ── P&L aggregation ───────────────────────────────────────────────────────────
 
-def _aggregate_pnl_by_theme_ticker() -> Dict[Tuple[str, str], float]:
+def _aggregate_stats_by_theme_ticker() -> Dict[Tuple[str, str], Dict[str, float]]:
     """
-    Read trades.csv, sum realized_pnl for CLOSED trades grouped by (theme, symbol).
-    Returns dict: {(theme, ticker): total_realized_pnl}
+    Read trades.csv and aggregate CLOSED trades by (theme, symbol).
+    Returns dict: {(theme, ticker): {'pnl': total_realized_pnl, 'count': n_closed}}
     """
     if not os.path.exists(TRADES_CSV):
         logger.info("adaptive_mapper: trades.csv not found — nothing to adapt.")
         return {}
 
-    pnl_map: Dict[Tuple[str, str], float] = defaultdict(float)
+    stats_map: Dict[Tuple[str, str], Dict[str, float]] = defaultdict(
+        lambda: {"pnl": 0.0, "count": 0.0}
+    )
 
     try:
         with open(TRADES_CSV, newline="") as f:
@@ -81,18 +85,26 @@ def _aggregate_pnl_by_theme_ticker() -> Dict[Tuple[str, str], float]:
                 except (ValueError, TypeError):
                     rpnl = 0.0
                 if theme and symbol:
-                    pnl_map[(theme, symbol)] += rpnl
+                    bucket = stats_map[(theme, symbol)]
+                    bucket["pnl"] += rpnl
+                    bucket["count"] += 1.0
     except Exception as e:
         logger.error(f"adaptive_mapper: error reading trades.csv: {e}")
         return {}
 
-    return dict(pnl_map)
+    normalized: Dict[Tuple[str, str], Dict[str, float]] = {}
+    for key, bucket in stats_map.items():
+        normalized[key] = {
+            "pnl": round(float(bucket["pnl"]), 6),
+            "count": int(bucket["count"]),
+        }
+    return normalized
 
 # ── Weight update logic ───────────────────────────────────────────────────────
 
 def _adjust_weights(
     weights_section: Dict[str, Dict[str, float]],
-    pnl_map: Dict[Tuple[str, str], float]
+    stats_map: Dict[Tuple[str, str], Dict[str, float]]
 ) -> Tuple[Dict[str, Dict[str, float]], int]:
     """
     Apply P&L-based adjustments to weights.
@@ -100,7 +112,20 @@ def _adjust_weights(
     """
     adjustments = 0
 
-    for (theme, ticker), total_pnl in pnl_map.items():
+    for (theme, ticker), stats in stats_map.items():
+        total_pnl = float(stats.get("pnl", 0.0))
+        n_closed = int(stats.get("count", 0))
+
+        if n_closed < ADAPTIVE_MIN_CLOSED_TRADES_PER_THEME_TICKER:
+            logger.info(
+                "  %s/%s: skip (closed=%d < min=%d)",
+                theme,
+                ticker,
+                n_closed,
+                ADAPTIVE_MIN_CLOSED_TRADES_PER_THEME_TICKER,
+            )
+            continue
+
         if theme not in weights_section:
             # Theme not yet in weights — initialize all tickers at 1.0
             logger.info(f"adaptive_mapper: new theme '{theme}' — initializing weights")
@@ -127,7 +152,7 @@ def _adjust_weights(
         adjustments += 1
         logger.info(
             f"  {theme}/{ticker}: weight {current_w:.4f} → {new_w:.4f} "
-            f"{direction} (P&L={total_pnl:+.2f})"
+            f"{direction} (P&L={total_pnl:+.2f}, closed={n_closed})"
         )
 
     return weights_section, adjustments
@@ -185,20 +210,22 @@ def run_adaptive_mapping(force: bool = False) -> bool:
     logger.info("=== Adaptive mapper: running weight update ===")
     meta["cycles_since_last_adapt"] = 0
 
-    pnl_map = _aggregate_pnl_by_theme_ticker()
+    stats_map = _aggregate_stats_by_theme_ticker()
 
-    if not pnl_map:
+    if not stats_map:
         logger.info("adaptive_mapper: no closed trades found — weights unchanged.")
         meta["last_updated"] = datetime.now(timezone.utc).isoformat()
         _save_weights_file(data)
         return False
 
     # Log what we found
-    logger.info(f"adaptive_mapper: {len(pnl_map)} (theme, ticker) P&L entries found:")
-    for (theme, ticker), pnl in sorted(pnl_map.items()):
-        logger.info(f"  {theme}/{ticker}: P&L={pnl:+.2f}")
+    logger.info(f"adaptive_mapper: {len(stats_map)} (theme, ticker) stats entries found:")
+    for (theme, ticker), stats in sorted(stats_map.items()):
+        logger.info(
+            f"  {theme}/{ticker}: P&L={float(stats['pnl']):+.2f} closed={int(stats['count'])}"
+        )
 
-    weights_section, n_adjustments = _adjust_weights(data.get("weights", {}), pnl_map)
+    weights_section, n_adjustments = _adjust_weights(data.get("weights", {}), stats_map)
     weights_section = _normalize_weights(weights_section)
     data["weights"] = weights_section
 
@@ -206,9 +233,16 @@ def run_adaptive_mapping(force: bool = False) -> bool:
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "n_adjustments": n_adjustments,
+        "stats_by_theme_ticker": {
+            f"{theme}/{ticker}": {
+                "pnl": round(float(stats["pnl"]), 4),
+                "closed_trades": int(stats["count"]),
+            }
+            for (theme, ticker), stats in stats_map.items()
+        },
         "pnl_by_theme_ticker": {
-            f"{theme}/{ticker}": round(pnl, 4)
-            for (theme, ticker), pnl in pnl_map.items()
+            f"{theme}/{ticker}": round(float(stats["pnl"]), 4)
+            for (theme, ticker), stats in stats_map.items()
         },
         "top_tickers_after": {
             theme: max(ticker_map.items(), key=lambda x: x[1])[0]

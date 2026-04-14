@@ -63,6 +63,17 @@ def init_db():
         timestamp TEXT
     )""")
 
+    # ── market signal cooldowns ─────────────────────────────────────────────
+    # Prevents re-trading the same (market_id, side) signal repeatedly.
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS market_signal_cooldowns (
+        market_id TEXT NOT NULL,
+        side TEXT NOT NULL,
+        last_trade_ts TEXT NOT NULL,
+        trade_id TEXT,
+        PRIMARY KEY (market_id, side)
+    )""")
+
     conn.commit()
     conn.close()
 

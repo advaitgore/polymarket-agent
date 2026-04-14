@@ -23,7 +23,13 @@ from datetime import datetime, timedelta
 import zoneinfo
 from typing import Optional
 
-from config import LOG_FILE, LOG_DIR
+from config import (
+    LOG_FILE,
+    LOG_DIR,
+    NEWS_CHECK_ENABLED,
+    NEWS_CHECK_MAX_PER_CYCLE,
+    ADAPTIVE_MAPPING_ENABLED,
+)
 from db_init import init_db, init_csv_files
 from fetch_markets import run_fetch_cycle
 from detect_signals import run_signal_detection, append_signals_to_csv
@@ -140,9 +146,21 @@ def run_cycle(cycle_num: int, run_adapt: bool = False) -> int:
     except Exception as e:
         logger.error(f"[2/6] Signal detection failed: {e}\n{traceback.format_exc()}")
 
-    # ── 3. News check (bypassed for backtest parity) ──────────────────────
+    # ── 3. Optional news check ────────────────────────────────────────────
     if signals:
-        logger.info("[3/6] Qualitative news check bypassed to enforce pure 15m mathematical backtest parity.")
+        if NEWS_CHECK_ENABLED:
+            try:
+                from news_checker import enrich_signals_with_news
+
+                logger.info(
+                    "[3/6] Running news enrichment for up to %d signal(s)...",
+                    NEWS_CHECK_MAX_PER_CYCLE,
+                )
+                signals = enrich_signals_with_news(signals, max_checks=NEWS_CHECK_MAX_PER_CYCLE)
+            except Exception as e:
+                logger.error(f"[3/6] News enrichment failed: {e}\n{traceback.format_exc()}")
+        else:
+            logger.info("[3/6] News enrichment disabled by config; keeping raw mathematical signals.")
     else:
         logger.info("[3/6] No signals to check")
 
@@ -156,6 +174,7 @@ def run_cycle(cycle_num: int, run_adapt: bool = False) -> int:
     # ── 5. Place best trade ───────────────────────────────────────────────
     try:
         logger.info("[5/6] Evaluating trade opportunity...")
+        logger.info("[5/6] Trade path confirmed: market-hours gate already passed for this cycle.")
         best = select_best_signal(signals)
         if best:
             logger.info(
@@ -184,12 +203,15 @@ def run_cycle(cycle_num: int, run_adapt: bool = False) -> int:
 
     # ── 7. Adaptive mapper (once per trading day) ─────────────────────────
     if run_adapt:
-        try:
-            logger.info("[7/7] Running adaptive instrument mapper (daily weight update)...")
-            updated = run_adaptive_mapping(force=True)
-            logger.info(f"[7/7] Adaptive mapper: {'weights updated' if updated else 'no closed trades yet — weights unchanged'}.")
-        except Exception as e:
-            logger.error(f"[7/7] Adaptive mapper failed: {e}\n{traceback.format_exc()}")
+        if ADAPTIVE_MAPPING_ENABLED:
+            try:
+                logger.info("[7/7] Running adaptive instrument mapper (daily weight update)...")
+                updated = run_adaptive_mapping(force=True)
+                logger.info(f"[7/7] Adaptive mapper: {'weights updated' if updated else 'no closed trades yet — weights unchanged'}.")
+            except Exception as e:
+                logger.error(f"[7/7] Adaptive mapper failed: {e}\n{traceback.format_exc()}")
+        else:
+            logger.info("[7/7] Adaptive mapper disabled by config — skipping.")
 
     logger.info(f"Cycle {cycle_num} complete.\n")
     return len(stored)
@@ -199,17 +221,17 @@ def main():
     start = time.time()
     et = now_et()
 
-    logger.info("┌──────────────────────────────────────────────────────────────┐")
-    logger.info("│         Polymarket Trading System — Single-Shot Run           │")
-    logger.info(f"│  {et.strftime('%Y-%m-%d %H:%M:%S ET'):<58}│")
-    logger.info("│  Driven by schedule_cron — no internal sleep loop            │")
-    logger.info("└──────────────────────────────────────────────────────────────┘")
+    logger.info("+--------------------------------------------------------------+")
+    logger.info("|         Polymarket Trading System - Single-Shot Run          |")
+    logger.info(f"|  {et.strftime('%Y-%m-%d %H:%M:%S ET'):<58}|")
+    logger.info("|  Driven by schedule_cron - no internal sleep loop            |")
+    logger.info("+--------------------------------------------------------------+")
 
     init_db()
     init_csv_files()
 
     cycle_num = get_cycle_num()
-    run_adapt = should_run_adapt()
+    run_adapt = ADAPTIVE_MAPPING_ENABLED and should_run_adapt()
 
     try:
         run_cycle(cycle_num, run_adapt=run_adapt)

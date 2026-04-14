@@ -63,6 +63,7 @@ from config import (
     SIM_EXECUTION_VENUE, SIM_BROKER,
     ACCOUNT_EQUITY_USD, RISK_PCT, RR_MIN,
     MAX_OPEN_POSITIONS, MAX_HOLD_TRADING_DAYS, DEFAULT_SL_FRACTION,
+    MARKET_SIGNAL_COOLDOWN_HOURS,
 )
 
 logger = logging.getLogger(__name__)
@@ -329,6 +330,71 @@ def load_open_positions() -> Dict[str, Dict]:
         return {}
 
 
+def _parse_iso_utc(raw_ts: str) -> Optional[datetime]:
+    """Parse stored timestamps into UTC datetimes."""
+    try:
+        ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc)
+
+
+def _load_market_signal_cooldowns(now_utc: datetime) -> Dict[Tuple[str, str], float]:
+    """
+    Return active cooldowns as {(market_id, side): remaining_hours}.
+    """
+    cooldowns: Dict[Tuple[str, str], float] = {}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute(
+            "SELECT market_id, side, last_trade_ts FROM market_signal_cooldowns"
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not read market_signal_cooldowns: {e}")
+        return cooldowns
+
+    for market_id, side, last_trade_ts in rows:
+        ts = _parse_iso_utc(last_trade_ts)
+        if ts is None:
+            continue
+        elapsed_hours = (now_utc - ts).total_seconds() / 3600.0
+        remaining = MARKET_SIGNAL_COOLDOWN_HOURS - elapsed_hours
+        if remaining > 0:
+            cooldowns[(str(market_id), str(side).upper())] = remaining
+
+    return cooldowns
+
+
+def _record_market_signal_cooldown(
+    market_id: str,
+    side: str,
+    timestamp_iso: str,
+    trade_id: str,
+):
+    """Store/update cooldown for a traded (market_id, side) pair."""
+    if not market_id:
+        return
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            """
+            INSERT INTO market_signal_cooldowns (market_id, side, last_trade_ts, trade_id)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(market_id, side) DO UPDATE SET
+                last_trade_ts=excluded.last_trade_ts,
+                trade_id=excluded.trade_id
+            """,
+            (market_id, side.upper(), timestamp_iso, trade_id),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not persist market signal cooldown for {market_id}/{side}: {e}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Signal selector
 # ─────────────────────────────────────────────────────────────────────────────
@@ -344,10 +410,13 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
       1. Is not already in an open position (same correlated instrument).
       2. Has a real stock price available from Yahoo Finance.
       3. Has enough room for a valid SL/TP (RR >= RR_MIN).
-      4. Would not breach the aggregate exposure cap.
+            4. Is not within market-side cooldown window.
     Returns None if nothing qualifies.
     """
     open_positions = load_open_positions()
+    now_utc = datetime.now(timezone.utc)
+    active_cooldowns = _load_market_signal_cooldowns(now_utc)
+
     tradable = [
         s for s in signals
         if s.get("trade_eligible", True)
@@ -364,8 +433,23 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
 
     for sig in tradable:
         symbol = sig["correlated_instrument"]
+        market_id = str(sig.get("market_id", ""))
+        side = determine_side(sig).upper()
+
         if symbol in open_positions:
             continue
+
+        if market_id:
+            remaining = active_cooldowns.get((market_id, side))
+            if remaining is not None:
+                logger.info(
+                    "Skip %s [%s]: market cooldown active for %.2fh (market_id=%s)",
+                    symbol,
+                    side,
+                    remaining,
+                    market_id,
+                )
+                continue
 
         # Fetch real stock price
         entry = get_stock_price(symbol)
@@ -484,6 +568,7 @@ def place_paper_trade(signal: Dict) -> Optional[Dict]:
     }
 
     _append_trade_row(trade)
+    _record_market_signal_cooldown(market_id, side, now_iso, trade_id)
     logger.info(
         f"Trade appended: {trade_id} — {side} {quantity:.6f}× {symbol} "
         f"@ ${entry:.2f}  SL=${stop_loss:.2f}  TP=${take_profit:.2f}  [simulated]"
