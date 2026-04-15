@@ -31,6 +31,10 @@ PRICE_MOVE_THRESHOLD  = 3.0     # pp absolute move to flag as signal (Optimized 
 # Guard against cold-start false positives when the DB has very fresh history.
 MIN_HISTORY_HOURS_FOR_SIGNAL = 12.0
 
+# Skip near-resolved contracts where probability is already at terminal extremes.
+NEAR_RESOLVED_PROB_LOW = 0.10
+NEAR_RESOLVED_PROB_HIGH = 0.90
+
 # Cooldown to avoid repeatedly trading the same market-side signal every cycle.
 MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
 

@@ -550,6 +550,11 @@
       "dutch election",
       "polish election",
       "win the.*presidential election"
+    ],
+    "price_target_binaries": [
+      "\\bhit\\b.*\\$\\d+",
+      "\\bbelow\\s+\\$\\d+",
+      "\\babove\\s+\\$\\d+"
     ]
   }
 }

@@ -25,7 +25,8 @@ from typing import List, Dict, Optional, Tuple
 
 from config import (
     DB_PATH, SIGNALS_CSV, CORRELATIONS_JSON,
-    PRICE_MOVE_THRESHOLD, MIN_HISTORY_HOURS_FOR_SIGNAL
+    PRICE_MOVE_THRESHOLD, MIN_HISTORY_HOURS_FOR_SIGNAL,
+    NEAR_RESOLVED_PROB_LOW, NEAR_RESOLVED_PROB_HIGH,
 )
 
 logger = logging.getLogger(__name__)
@@ -401,6 +402,10 @@ def run_signal_detection() -> List[Dict]:
         for (outcome_name,) in outcomes:
             old_price, new_price, anchor_ts = get_24h_delta(conn, market_id, outcome_name)
             if old_price is None or new_price is None:
+                continue
+
+            # Ignore near-resolved contracts where directional equity edge is usually exhausted.
+            if new_price < NEAR_RESOLVED_PROB_LOW or new_price > NEAR_RESOLVED_PROB_HIGH:
                 continue
 
             change_pp = (new_price - old_price) * 100.0
