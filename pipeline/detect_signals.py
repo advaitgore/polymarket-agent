@@ -370,8 +370,7 @@ def compute_edge_score(
 ) -> float:
     base = abs(prob_change_pp) / 5.0
     recency = 1.5 if hours_since_move <= 6 else (1.2 if hours_since_move <= 12 else 1.0)
-    news_mult = 0.3 if explained else 1.5
-    return round(base * recency * news_mult, 3)
+    return round(base * recency, 3)
 
 
 def run_signal_detection() -> List[Dict]:

@@ -26,8 +26,6 @@ from typing import Optional
 from config import (
     LOG_FILE,
     LOG_DIR,
-    NEWS_CHECK_ENABLED,
-    NEWS_CHECK_MAX_PER_CYCLE,
     ADAPTIVE_MAPPING_ENABLED,
 )
 from db_init import init_db, init_csv_files
@@ -146,21 +144,9 @@ def run_cycle(cycle_num: int, run_adapt: bool = False) -> int:
     except Exception as e:
         logger.error(f"[2/6] Signal detection failed: {e}\n{traceback.format_exc()}")
 
-    # ── 3. Optional news check ────────────────────────────────────────────
+    # ── 3. News check removed ─────────────────────────────────────────────
     if signals:
-        if NEWS_CHECK_ENABLED:
-            try:
-                from news_checker import enrich_signals_with_news
-
-                logger.info(
-                    "[3/6] Running news enrichment for up to %d signal(s)...",
-                    NEWS_CHECK_MAX_PER_CYCLE,
-                )
-                signals = enrich_signals_with_news(signals, max_checks=NEWS_CHECK_MAX_PER_CYCLE)
-            except Exception as e:
-                logger.error(f"[3/6] News enrichment failed: {e}\n{traceback.format_exc()}")
-        else:
-            logger.info("[3/6] News enrichment disabled by config; keeping raw mathematical signals.")
+        logger.info("[3/6] News enrichment removed; using raw mathematical signals.")
     else:
         logger.info("[3/6] No signals to check")
 
