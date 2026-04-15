@@ -45,6 +45,8 @@ RR_MIN               = 2.0        # min reward:risk ratio
 MAX_OPEN_POSITIONS   = 10
 SIGNAL_THRESHOLD_PP  = 3.0        # minimum probability change in percentage points
 MAX_HOLD_BARS        = 10 * 26    # ~10 trading days × 26 fifteen-minute bars per day
+MIN_HISTORY_HOURS_FOR_SIGNAL = 12.0
+MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
 
 VOL_OVERRIDES = {
     "IBIT": 0.06, "ETHA": 0.07, "MSTR": 0.10, "NVDA": 0.05,
@@ -185,6 +187,75 @@ def classify_question(question: str) -> Tuple[str, str]:
     return best_theme, best_entry.get("primary_ticker", "NONE")
 
 
+def compute_edge_score(
+    prob_change_pp: float,
+    hours_since_move: float = 12.0,
+    explained: bool = False,
+) -> float:
+    base = abs(prob_change_pp) / 5.0
+    recency = 1.5 if hours_since_move <= 6 else (1.2 if hours_since_move <= 12 else 1.0)
+    news_mult = 0.3 if explained else 1.5
+    return round(base * recency * news_mult, 3)
+
+
+def get_24h_delta_with_anchor(
+    mdf: pd.DataFrame,
+    ts: pd.Timestamp,
+) -> Tuple[Optional[float], Optional[float], Optional[pd.Timestamp]]:
+    """
+    Mirror pipeline get_24h_delta behavior:
+      1) Use true 24h anchor when available.
+      2) If unavailable, use earliest sample only if history is mature enough.
+    """
+    lookback = ts - timedelta(hours=24)
+
+    mask_now = mdf["timestamp"] <= ts
+    if not mask_now.any():
+        return None, None, None
+    row_now = mdf.loc[mask_now].iloc[-1]
+    current_price = float(row_now["probability"])
+
+    mask_old = mdf["timestamp"] <= lookback
+    if mask_old.any():
+        row_old = mdf.loc[mask_old].iloc[-1]
+        return float(row_old["probability"]), current_price, row_old["timestamp"]
+
+    snap = mdf.loc[mask_now].iloc[0]
+    snap_ts = snap["timestamp"]
+    history_age_hours = (ts - snap_ts).total_seconds() / 3600.0
+    if history_age_hours < MIN_HISTORY_HOURS_FOR_SIGNAL:
+        return None, None, None
+
+    return float(snap["probability"]), current_price, snap_ts
+
+
+def estimate_hours_since_move(
+    mdf: pd.DataFrame,
+    ts: pd.Timestamp,
+    old_price: float,
+) -> float:
+    """
+    Estimate recency by first threshold-cross in the last 24h window.
+    """
+    start = ts - timedelta(hours=24)
+    rows = mdf.loc[(mdf["timestamp"] >= start) & (mdf["timestamp"] <= ts)]
+    if rows.empty:
+        return 24.0
+
+    first_cross_ts = None
+    for _, row in rows.iterrows():
+        price = float(row["probability"])
+        if abs((price - old_price) * 100.0) >= SIGNAL_THRESHOLD_PP:
+            first_cross_ts = row["timestamp"]
+            break
+
+    if first_cross_ts is None:
+        latest_ts = rows.iloc[-1]["timestamp"]
+        return max(0.0, (ts - latest_ts).total_seconds() / 3600.0)
+
+    return max(0.0, (ts - first_cross_ts).total_seconds() / 3600.0)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Data loading
 # ─────────────────────────────────────────────────────────────────────────────
@@ -233,9 +304,7 @@ def run_backtest():
     closed_trades: List[Dict] = []
     signals_generated = 0
     signals_traded = 0
-    # Track which (market_id, side) combos have already been traded
-    # so we don't re-enter the same persistent signal every bar
-    traded_market_ids: set = set()
+    market_side_last_trade_ts: Dict[Tuple[str, str], pd.Timestamp] = {}
 
     log.info(f"\n{'='*70}")
     log.info(f"STARTING BACKTEST  |  Equity: ${equity:.2f}  |  Bars: {len(stock_timestamps)}")
@@ -294,92 +363,120 @@ def run_backtest():
         open_positions = still_open
 
         # ── 2. SIGNAL DETECTION ───────────────────────────────────────────
-        # For each market, compare current probability to ~24h ago
-        lookback = ts - timedelta(hours=24)
-
+        candidate_signals: List[Dict] = []
         for mid, mdf in poly_by_market.items():
-            # Find the most recent probability <= ts
-            mask_now = mdf["timestamp"] <= ts
-            if not mask_now.any():
+            old_price, new_price, anchor_ts = get_24h_delta_with_anchor(mdf, ts)
+            if old_price is None or new_price is None:
                 continue
-            row_now = mdf.loc[mask_now].iloc[-1]
-            p_now = row_now["probability"]
 
-            # Find the most recent probability <= lookback
-            mask_old = mdf["timestamp"] <= lookback
-            if not mask_old.any():
-                continue
-            row_old = mdf.loc[mask_old].iloc[-1]
-            p_old = row_old["probability"]
-
-            delta_pp = (p_now - p_old) * 100.0
+            delta_pp = (new_price - old_price) * 100.0
             if abs(delta_pp) < SIGNAL_THRESHOLD_PP:
                 continue
 
-            signals_generated += 1
+            row_now = mdf.loc[mdf["timestamp"] <= ts].iloc[-1]
             question = row_now["question"]
             theme, instrument = classify_question(question)
+            signals_generated += 1
 
-            if instrument == "NONE":
-                continue
-            if instrument not in prices:
-                continue
-            # Don't double-up on positions
-            if any(p["symbol"] == instrument for p in open_positions):
-                continue
-            if len(open_positions) >= MAX_OPEN_POSITIONS:
-                continue
-            # Don't re-enter a signal we already traded from this market
-            side_preview = "BUY" if delta_pp > 0 else "SELL"
-            trade_key = (mid, side_preview)
-            if trade_key in traded_market_ids:
-                continue
-            traded_market_ids.add(trade_key)
-
-            # ── 3. TRADE SIZING ───────────────────────────────────────────
-            entry = prices[instrument]
-            sl_frac = VOL_OVERRIDES.get(instrument, 0.05)
-            sl_dist = entry * sl_frac
-            if sl_dist <= 0:
+            if instrument == "NONE" or instrument not in prices:
                 continue
 
-            risk_dollar = equity * RISK_PCT
-            qty = risk_dollar / sl_dist
-            tp_dist = sl_dist * RR_MIN
-
-            side = "BUY" if delta_pp > 0 else "SELL"
-            if side == "BUY":
-                sl = round(entry - sl_dist, 4)
-                tp = round(entry + tp_dist, 4)
-            else:
-                sl = round(entry + sl_dist, 4)
-                tp = round(entry - tp_dist, 4)
-
-            pos = {
-                "trade_id": str(uuid.uuid4())[:8],
-                "symbol": instrument,
-                "side": side,
-                "quantity": round(qty, 6),
-                "entry_price": round(entry, 4),
-                "mark_price": round(entry, 4),
-                "stop_loss": sl,
-                "take_profit": tp,
-                "status": "OPEN",
-                "open_date": str(ts),
-                "close_date": "",
-                "close_reason": "",
-                "realized_pnl": 0.0,
-                "market_question": question[:80],
-                "theme": theme,
-                "delta_pp": round(delta_pp, 2),
-                "bars_held": 0,
-            }
-            open_positions.append(pos)
-            signals_traded += 1
-            log.info(
-                f"  OPEN  {side:4s} {instrument:5s} @ ${entry:.2f} | "
-                f"SL=${sl:.2f} TP=${tp:.2f} | signal: {question[:40]}..."
+            hours_since_move = estimate_hours_since_move(mdf, ts, old_price)
+            edge_score = compute_edge_score(
+                delta_pp,
+                hours_since_move=hours_since_move,
+                explained=False,
             )
+
+            candidate_signals.append({
+                "market_id": mid,
+                "instrument": instrument,
+                "theme": theme,
+                "delta_pp": delta_pp,
+                "question": question,
+                "edge_score": edge_score,
+                "hours_since_move": hours_since_move,
+                "anchor_ts": anchor_ts,
+            })
+
+        # ── 3. BEST SIGNAL SELECTION (one trade per bar) ──────────────────
+        if len(open_positions) >= MAX_OPEN_POSITIONS:
+            continue
+
+        candidate_signals.sort(key=lambda x: x["edge_score"], reverse=True)
+        open_symbols = {p["symbol"] for p in open_positions}
+        selected = None
+        for sig in candidate_signals:
+            instrument = sig["instrument"]
+            if instrument in open_symbols:
+                continue
+
+            side_preview = "BUY" if sig["delta_pp"] > 0 else "SELL"
+            cooldown_key = (sig["market_id"], side_preview)
+            last_ts = market_side_last_trade_ts.get(cooldown_key)
+            if last_ts is not None:
+                elapsed_hours = (ts - last_ts).total_seconds() / 3600.0
+                if elapsed_hours < MARKET_SIGNAL_COOLDOWN_HOURS:
+                    continue
+
+            selected = sig
+            break
+
+        if selected is None:
+            continue
+
+        # ── 4. TRADE SIZING ───────────────────────────────────────────────
+        side = "BUY" if selected["delta_pp"] > 0 else "SELL"
+        market_side_last_trade_ts[(selected["market_id"], side)] = ts
+
+        entry = prices[selected["instrument"]]
+        sl_frac = VOL_OVERRIDES.get(selected["instrument"], 0.05)
+        sl_dist = entry * sl_frac
+        if sl_dist <= 0:
+            continue
+
+        risk_dollar = equity * RISK_PCT
+        qty = risk_dollar / sl_dist
+        tp_dist = sl_dist * RR_MIN
+
+        if side == "BUY":
+            sl = round(entry - sl_dist, 4)
+            tp = round(entry + tp_dist, 4)
+        else:
+            sl = round(entry + sl_dist, 4)
+            tp = round(entry - tp_dist, 4)
+
+        pos = {
+            "trade_id": str(uuid.uuid4())[:8],
+            "market_id": selected["market_id"],
+            "symbol": selected["instrument"],
+            "side": side,
+            "quantity": round(qty, 6),
+            "entry_price": round(entry, 4),
+            "mark_price": round(entry, 4),
+            "stop_loss": sl,
+            "take_profit": tp,
+            "status": "OPEN",
+            "open_date": str(ts),
+            "close_date": "",
+            "close_reason": "",
+            "realized_pnl": 0.0,
+            "market_question": selected["question"][:80],
+            "theme": selected["theme"],
+            "delta_pp": round(selected["delta_pp"], 2),
+            "edge_score": selected["edge_score"],
+            "hours_since_move": round(selected["hours_since_move"], 2),
+            "bars_held": 0,
+        }
+        open_positions.append(pos)
+        signals_traded += 1
+        anchor_str = selected["anchor_ts"].isoformat() if selected["anchor_ts"] is not None else "n/a"
+        log.info(
+            f"  OPEN  {side:4s} {selected['instrument']:5s} @ ${entry:.2f} | "
+            f"SL=${sl:.2f} TP=${tp:.2f} | edge={selected['edge_score']:.2f} "
+            f"age={selected['hours_since_move']:.2f}h anchor={anchor_str} | "
+            f"signal: {selected['question'][:40]}..."
+        )
 
     # ── Force-close any remaining open positions at last known price ───────
     for pos in open_positions:
