@@ -9,12 +9,14 @@ import requests
 import sqlite3
 import logging
 import time
+import json
+import re
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 
 from config import (
     POLYMARKET_BASE, POLYMARKET_CLOB, DB_PATH,
-    FETCH_LIMIT, LOG_FILE
+    FETCH_LIMIT, LOG_FILE, CORRELATIONS_JSON
 )
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,9 @@ SESSION.headers.update({
     "User-Agent": "PolymarketResearchBot/1.0",
     "Accept": "application/json"
 })
+
+_THEMES_CACHE: Optional[List[Dict]] = None
+_NON_TRADABLE_CACHE: Optional[Dict] = None
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +50,65 @@ def _get(url: str, params: dict = None, retries: int = 3, backoff: float = 2.0) 
     logger.error(f"All retries exhausted for {url}")
     return None
 
+
+def _load_correlations() -> tuple[List[Dict], Dict]:
+    """Load theme keywords and non-tradable patterns from correlations.json."""
+    global _THEMES_CACHE, _NON_TRADABLE_CACHE
+
+    if _THEMES_CACHE is not None and _NON_TRADABLE_CACHE is not None:
+        return _THEMES_CACHE, _NON_TRADABLE_CACHE
+
+    try:
+        with open(CORRELATIONS_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        _THEMES_CACHE = data.get("themes", data.get("markets", []))
+        _NON_TRADABLE_CACHE = data.get("non_tradable_patterns", {})
+    except Exception as e:
+        logger.warning(f"Could not load correlations for relevance filtering: {e}")
+        _THEMES_CACHE = []
+        _NON_TRADABLE_CACHE = {}
+
+    return _THEMES_CACHE, _NON_TRADABLE_CACHE
+
+
+def _is_non_tradable(question: str, non_tradable_patterns: Dict) -> bool:
+    """Return True when question matches known non-tradable pattern categories."""
+    q = (question or "").lower()
+    if not q:
+        return True
+
+    for category, patterns in non_tradable_patterns.items():
+        if category == "description":
+            continue
+        for pattern in patterns:
+            try:
+                if re.search(str(pattern).lower(), q):
+                    return True
+            except re.error:
+                if str(pattern).lower() in q:
+                    return True
+
+    return False
+
+
+def _score_market(question: str, themes: List[Dict], non_tradable_patterns: Dict) -> int:
+    """Return keyword-overlap relevance score for tradable market questions."""
+    q = (question or "").lower()
+    if not q:
+        return 0
+
+    if _is_non_tradable(question, non_tradable_patterns):
+        return 0
+
+    best_score = 0
+    for entry in themes:
+        keywords = entry.get("keywords", [])
+        score = sum(1 for kw in keywords if str(kw).lower() in q)
+        if score > best_score:
+            best_score = score
+
+    return best_score
+
 # ── Gamma API — market metadata ───────────────────────────────────────────────
 
 def fetch_active_markets(limit: int = FETCH_LIMIT) -> List[Dict]:
@@ -59,6 +123,8 @@ def fetch_active_markets(limit: int = FETCH_LIMIT) -> List[Dict]:
         params = {
             "active": "true",
             "closed": "false",
+            "order": "volumeNum",
+            "ascending": "false",
             "limit": limit,
             "offset": offset
         }
@@ -251,6 +317,34 @@ def run_fetch_cycle():
     markets = fetch_active_markets()
     if not markets:
         logger.warning("No markets returned — API may be down")
+        return []
+
+    total_fetched = len(markets)
+    themes, non_tradable_patterns = _load_correlations()
+    ranked_markets = []
+    for m in markets:
+        question = m.get("question", "")
+        score = _score_market(question, themes, non_tradable_patterns)
+        if score <= 0:
+            continue
+
+        vol = m.get("volumeNum", m.get("volume", 0))
+        try:
+            vol = float(vol or 0)
+        except (ValueError, TypeError):
+            vol = 0.0
+
+        ranked_markets.append((score, vol, m))
+
+    ranked_markets.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    markets = [m for _, _, m in ranked_markets[:200]]
+    logger.info(
+        "Relevance-filtered markets: kept %d of %d fetched (top 200 by score+volume)",
+        len(markets),
+        total_fetched,
+    )
+    if not markets:
+        logger.warning("No relevant tradable markets after filtering")
         return []
 
     conn = sqlite3.connect(DB_PATH)
