@@ -47,6 +47,8 @@ SIGNAL_THRESHOLD_PP  = 3.0        # minimum probability change in percentage poi
 MAX_HOLD_BARS        = 10 * 26    # ~10 trading days × 26 fifteen-minute bars per day
 MIN_HISTORY_HOURS_FOR_SIGNAL = 12.0
 MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
+NEAR_RESOLVED_PROB_LOW = 0.10
+NEAR_RESOLVED_PROB_HIGH = 0.90
 
 VOL_OVERRIDES = {
     "IBIT": 0.06, "ETHA": 0.07, "MSTR": 0.10, "NVDA": 0.05,
@@ -123,6 +125,9 @@ EXTRA_NOISE_PATTERNS = [
     r"\bpublic sale\b",     # Token public sale markets
     r"\blaunch a token\b",  # Will X launch a token
     r"\bdip to\b",          # "Will X dip to $Y" price prediction (too noisy)
+    r"\bhit\b.*\$\d+",     # Price-target binary markets (e.g. "hit $130")
+    r"\bbelow\s+\$\d+",    # Price-threshold binary markets (e.g. "below $90")
+    r"\babove\s+\$\d+",    # Price-threshold binary markets (e.g. "above $100")
 ]
 
 
@@ -367,6 +372,10 @@ def run_backtest():
         for mid, mdf in poly_by_market.items():
             old_price, new_price, anchor_ts = get_24h_delta_with_anchor(mdf, ts)
             if old_price is None or new_price is None:
+                continue
+
+            # Skip near-resolved contracts where equity follow-through edge is exhausted.
+            if new_price < NEAR_RESOLVED_PROB_LOW or new_price > NEAR_RESOLVED_PROB_HIGH:
                 continue
 
             delta_pp = (new_price - old_price) * 100.0
