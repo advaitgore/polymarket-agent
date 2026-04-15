@@ -46,7 +46,12 @@ export function registerRoutes(server: any, app: Express) {
     };
 
     withDb(db => {
-      stats.total_markets = (db.prepare("SELECT COUNT(*) as c FROM markets WHERE COALESCE(active, 1)=1").get() as any).c;
+      stats.total_markets = (db.prepare(`
+        SELECT COUNT(DISTINCT m.id) as c
+        FROM markets m
+        JOIN outcomes o ON m.id = o.market_id
+        WHERE COALESCE(m.active, 1)=1
+      `).get() as any).c;
     });
 
     const signals = parseCsv(SIGNALS_CSV);

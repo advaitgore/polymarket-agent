@@ -348,6 +348,8 @@ def run_fetch_cycle():
         return []
 
     conn = sqlite3.connect(DB_PATH)
+    # Keep active market flags aligned with the current filtered intake set.
+    conn.execute("UPDATE markets SET active=0")
     stored = []
 
     for m in markets:
