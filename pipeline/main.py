@@ -122,6 +122,10 @@ def run_cycle(cycle_num: int, run_adapt: bool = False) -> int:
                 f"({'MARKET HOURS' if in_market else 'OFF HOURS'})")
     logger.info(f"{'='*60}")
 
+    if not in_market:
+        logger.info("[0/6] Off-hours guard active — exiting without fetch/signals/trades.")
+        return 0
+
     # ── 1. Fetch Polymarket data ──────────────────────────────────────────
     stored = []
     try:
@@ -130,10 +134,6 @@ def run_cycle(cycle_num: int, run_adapt: bool = False) -> int:
         logger.info(f"[1/6] Stored {len(stored)} outcome snapshots")
     except Exception as e:
         logger.error(f"[1/6] Market fetch failed: {e}\n{traceback.format_exc()}")
-
-    if not in_market:
-        logger.info("[1/6] Off-hours fetch only — skipping signals/trades.")
-        return len(stored)
 
     # ── 2. Detect signals ─────────────────────────────────────────────────
     signals = []
