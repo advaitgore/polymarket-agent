@@ -77,6 +77,13 @@ MAX_HOLD_TRADING_DAYS   = 10
 # price history is too thin to estimate volatility).
 DEFAULT_SL_FRACTION    = 0.05
 
+# ── Realized-vol gate ──────────────────────────────────────────────────────
+# Suppress signals where correlated instrument 1-day realized vol exceeds
+# this multiple of its recent 30-day average.
+# Set VOL_GATE_ENABLED=False (or multiplier <= 0) to disable.
+VOL_GATE_ENABLED       = True
+VOL_GATE_MULTIPLIER    = 2.0
+
 # ── Scheduling ────────────────────────────────────────────────────────────────
 # Weekdays 07:30–18:00 Eastern → MARKET_HOURS_INTERVAL_MINUTES
 # All other times              → OFF_HOURS_INTERVAL_MINUTES (or skip if no new data)

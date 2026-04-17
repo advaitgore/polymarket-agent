@@ -64,6 +64,7 @@ from config import (
     ACCOUNT_EQUITY_USD, RISK_PCT, RR_MIN,
     MAX_OPEN_POSITIONS, MAX_HOLD_TRADING_DAYS, DEFAULT_SL_FRACTION,
     MARKET_SIGNAL_COOLDOWN_HOURS,
+    VOL_GATE_ENABLED, VOL_GATE_MULTIPLIER,
 )
 
 logger = logging.getLogger(__name__)
@@ -313,6 +314,52 @@ def estimate_stock_volatility(symbol: str) -> float:
     return VOL_OVERRIDES.get(symbol, DEFAULT_SL_FRACTION)
 
 
+def compute_live_vol_ratio(symbol: str, lookback_days: int = 30) -> float:
+    """
+    Fetches real daily price history from Yahoo Finance and computes the
+    ratio of yesterday's 1-day absolute return to the recent average.
+    Returns 1.0 if data unavailable (fail open).
+    """
+    # Keep a longer range than lookback to tolerate sparse/missing candles.
+    range_days = max(lookback_days * 2, 60)
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        f"?interval=1d&range={range_days}d"
+    )
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; PolymarketTrader/1.0)"}
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        closes = data["chart"]["result"][0]["indicators"]["quote"][0]["close"]
+        closes = [float(c) for c in closes if c is not None]
+        if len(closes) < lookback_days + 2:
+            return 1.0
+
+        returns = [abs(closes[i] / closes[i - 1] - 1.0) for i in range(1, len(closes))]
+        if len(returns) < lookback_days + 1:
+            return 1.0
+
+        one_day = returns[-1]
+        avg_lookback = sum(returns[-(lookback_days + 1):-1]) / float(lookback_days)
+        if avg_lookback == 0:
+            return 1.0
+
+        ratio = one_day / avg_lookback
+        logger.debug(
+            "Vol ratio %s: 1d=%.4f %dd_avg=%.4f ratio=%.2f",
+            symbol,
+            one_day,
+            lookback_days,
+            avg_lookback,
+            ratio,
+        )
+        return ratio
+    except Exception as e:
+        logger.warning(f"Vol ratio fetch failed for {symbol}: {e} — defaulting to 1.0")
+        return 1.0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Position loader
 # ─────────────────────────────────────────────────────────────────────────────
@@ -431,6 +478,8 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
         logger.info(f"Skip: position count cap reached ({len(open_positions)}/{MAX_OPEN_POSITIONS})")
         return None
 
+    vol_ratio_cache: Dict[str, float] = {}
+
     for sig in tradable:
         symbol = sig["correlated_instrument"]
         market_id = str(sig.get("market_id", ""))
@@ -448,6 +497,20 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
                     side,
                     remaining,
                     market_id,
+                )
+                continue
+
+        if VOL_GATE_ENABLED and VOL_GATE_MULTIPLIER > 0 and symbol != "NONE":
+            vol_ratio = vol_ratio_cache.get(symbol)
+            if vol_ratio is None:
+                vol_ratio = compute_live_vol_ratio(symbol)
+                vol_ratio_cache[symbol] = vol_ratio
+            if vol_ratio > VOL_GATE_MULTIPLIER:
+                logger.info(
+                    "Skip %s: vol gate triggered (1d/30d ratio=%.2f > %.2fx)",
+                    symbol,
+                    vol_ratio,
+                    VOL_GATE_MULTIPLIER,
                 )
                 continue
 

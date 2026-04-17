@@ -50,6 +50,32 @@ MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
 NEAR_RESOLVED_PROB_LOW = 0.10
 NEAR_RESOLVED_PROB_HIGH = 0.90
 
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+# Vol gate can be toggled per run without editing code.
+VOL_GATE_ENABLED = _env_flag("VOL_GATE_ENABLED", False)
+VOL_GATE_MULTIPLIER = _env_float("VOL_GATE_MULTIPLIER", 2.0)
+VOL_GATE_DIAGNOSTICS_CSV = os.getenv(
+    "VOL_GATE_DIAGNOSTICS_CSV",
+    os.path.join(DATA_DIR, "vol_gate_diagnostics.csv"),
+)
+
 VOL_OVERRIDES = {
     "IBIT": 0.06, "ETHA": 0.07, "MSTR": 0.10, "NVDA": 0.05,
     "TSLA": 0.07, "QQQ": 0.03, "SPY": 0.02, "TLT": 0.02,
@@ -260,6 +286,42 @@ def estimate_hours_since_move(
     return max(0.0, (ts - first_cross_ts).total_seconds() / 3600.0)
 
 
+def compute_realized_vol_ratio(symbol: str, signal_date, price_history_df: pd.DataFrame) -> float:
+    """
+    Returns ratio of 1-day realized vol to 30-day average realized vol.
+    price_history_df must have columns: date, symbol, close.
+    Returns 1.0 (neutral) if insufficient data.
+    """
+    if price_history_df.empty:
+        return 1.0
+
+    if isinstance(signal_date, pd.Timestamp):
+        signal_day = signal_date.date()
+    else:
+        signal_day = pd.to_datetime(signal_date, utc=True).date()
+
+    df = price_history_df[price_history_df["symbol"] == symbol].copy()
+    if df.empty:
+        return 1.0
+
+    df = df.sort_values("date")
+    df["returns"] = df["close"].pct_change().abs()
+
+    df_at_or_before = df[df["date"] <= signal_day]
+    if len(df_at_or_before) < 31:
+        return 1.0
+
+    one_day_vol = df_at_or_before.iloc[-1]["returns"]
+    if pd.isna(one_day_vol):
+        return 1.0
+
+    thirty_day_avg = df_at_or_before.iloc[-31:-1]["returns"].mean()
+    if pd.isna(thirty_day_avg) or thirty_day_avg == 0:
+        return 1.0
+
+    return float(one_day_vol / thirty_day_avg)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Data loading
 # ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +347,14 @@ def load_data():
 def run_backtest():
     df_poly, df_stock = load_data()
 
+    # Build daily close history per symbol for realized-vol gate calculations.
+    price_history_df = (
+        df_stock.sort_values("timestamp")
+        .assign(date=lambda x: x["timestamp"].dt.date)
+        .groupby(["symbol", "date"], as_index=False)
+        .agg(close=("close", "last"))
+    )
+
     # Build a global sorted timeline of unique stock timestamps (these are the
     # 15-minute bars during which we can actually trade & mark positions).
     stock_timestamps = sorted(df_stock["timestamp"].unique())
@@ -309,6 +379,10 @@ def run_backtest():
     signals_generated = 0
     signals_traded = 0
     market_side_last_trade_ts: Dict[Tuple[str, str], pd.Timestamp] = {}
+
+    vol_gate_suppressed = 0
+    vol_gate_suppressed_by_symbol: Dict[str, int] = {}
+    vol_gate_daily_stats: Dict[datetime.date, Dict[str, int]] = {}
 
     log.info(f"\n{'='*70}")
     log.info(f"STARTING BACKTEST  |  Equity: ${equity:.2f}  |  Bars: {len(stock_timestamps)}")
@@ -388,6 +462,23 @@ def run_backtest():
 
             if instrument == "NONE" or instrument not in prices:
                 continue
+
+            day_key = ts.date()
+            day_stats = vol_gate_daily_stats.setdefault(
+                day_key,
+                {"pre_gate": 0, "suppressed": 0, "post_gate": 0},
+            )
+            day_stats["pre_gate"] += 1
+
+            if VOL_GATE_ENABLED:
+                vol_ratio = compute_realized_vol_ratio(instrument, ts, price_history_df)
+                if vol_ratio > VOL_GATE_MULTIPLIER:
+                    vol_gate_suppressed += 1
+                    vol_gate_suppressed_by_symbol[instrument] = vol_gate_suppressed_by_symbol.get(instrument, 0) + 1
+                    day_stats["suppressed"] += 1
+                    continue
+
+            day_stats["post_gate"] += 1
 
             hours_since_move = estimate_hours_since_move(mdf, ts, old_price)
             edge_score = compute_edge_score(
@@ -502,6 +593,42 @@ def run_backtest():
 
     # ── Results ───────────────────────────────────────────────────────────────
     print_results(closed_trades, equity, signals_generated, signals_traded)
+
+    if VOL_GATE_ENABLED:
+        cash_days = sorted(
+            d for d, s in vol_gate_daily_stats.items()
+            if s["pre_gate"] > 0 and s["post_gate"] == 0 and s["suppressed"] > 0
+        )
+        print("\n  Vol Gate Diagnostics")
+        print(f"  Enabled:              True")
+        print(f"  Multiplier:           {VOL_GATE_MULTIPLIER:.2f}x")
+        print(f"  Signals Suppressed:   {vol_gate_suppressed}")
+        print(f"  Cash Days:            {len(cash_days)}")
+
+        if cash_days:
+            print("  Cash Day Dates:")
+            for d in cash_days:
+                print(f"    {d.isoformat()}")
+
+        if vol_gate_suppressed_by_symbol:
+            print("\n  Suppressed By Symbol:")
+            for symbol, count in sorted(vol_gate_suppressed_by_symbol.items(), key=lambda kv: kv[1], reverse=True):
+                print(f"    {symbol:<8s} {count:>4d}")
+
+        try:
+            diag_rows = []
+            for d, s in sorted(vol_gate_daily_stats.items()):
+                diag_rows.append({
+                    "date": d.isoformat(),
+                    "pre_gate_candidates": s["pre_gate"],
+                    "suppressed_by_vol_gate": s["suppressed"],
+                    "post_gate_candidates": s["post_gate"],
+                    "all_suppressed": int(s["pre_gate"] > 0 and s["post_gate"] == 0 and s["suppressed"] > 0),
+                })
+            pd.DataFrame(diag_rows).to_csv(VOL_GATE_DIAGNOSTICS_CSV, index=False)
+            print(f"  Diagnostics CSV:      {VOL_GATE_DIAGNOSTICS_CSV}")
+        except Exception as e:
+            print(f"  Diagnostics CSV write failed: {e}")
 
     if closed_trades:
         df_out = pd.DataFrame(closed_trades)
