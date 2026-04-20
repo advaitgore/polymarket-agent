@@ -469,13 +469,47 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
         if s.get("trade_eligible", True)
         and s.get("correlated_instrument", "NONE") != "NONE"
     ]
+
+    vol_gate_active = VOL_GATE_ENABLED and VOL_GATE_MULTIPLIER > 0
+    vol_gate_outcomes: Dict[str, Tuple[float, bool]] = {}
+
+    def _log_vol_gate_summary() -> None:
+        if not vol_gate_active:
+            return
+
+        if not vol_gate_outcomes:
+            logger.info(
+                "Vol gate active (threshold=%.2fx) but no candidate symbols reached gate evaluation",
+                VOL_GATE_MULTIPLIER,
+            )
+            return
+
+        checked_count = len(vol_gate_outcomes)
+        blocked = [sym for sym, (_, passed) in vol_gate_outcomes.items() if not passed]
+        passed = [sym for sym, (_, passed) in vol_gate_outcomes.items() if passed]
+
+        logger.info(
+            "Vol gate summary: checked=%d blocked=%d passed=%d (threshold=%.2fx)",
+            checked_count,
+            len(blocked),
+            len(passed),
+            VOL_GATE_MULTIPLIER,
+        )
+        if blocked and not passed:
+            logger.info(
+                "Vol gate blocked all evaluated symbols this cycle: %s",
+                ", ".join(blocked),
+            )
+
     if not tradable:
+        _log_vol_gate_summary()
         return None
     tradable.sort(key=lambda x: x.get("edge_score", 0), reverse=True)
 
     # Count-based cap: max MAX_OPEN_POSITIONS concurrent trades
     if len(open_positions) >= MAX_OPEN_POSITIONS:
         logger.info(f"Skip: position count cap reached ({len(open_positions)}/{MAX_OPEN_POSITIONS})")
+        _log_vol_gate_summary()
         return None
 
     vol_ratio_cache: Dict[str, float] = {}
@@ -500,18 +534,24 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
                 )
                 continue
 
-        if VOL_GATE_ENABLED and VOL_GATE_MULTIPLIER > 0 and symbol != "NONE":
+        if vol_gate_active and symbol != "NONE":
             vol_ratio = vol_ratio_cache.get(symbol)
             if vol_ratio is None:
                 vol_ratio = compute_live_vol_ratio(symbol)
                 vol_ratio_cache[symbol] = vol_ratio
-            if vol_ratio > VOL_GATE_MULTIPLIER:
+
+            if symbol not in vol_gate_outcomes:
+                is_pass = vol_ratio <= VOL_GATE_MULTIPLIER
+                vol_gate_outcomes[symbol] = (vol_ratio, is_pass)
                 logger.info(
-                    "Skip %s: vol gate triggered (1d/30d ratio=%.2f > %.2fx)",
+                    "Vol gate check %s: %s (1d/30d ratio=%.2f vs %.2fx threshold)",
                     symbol,
+                    "PASS" if is_pass else "BLOCK",
                     vol_ratio,
                     VOL_GATE_MULTIPLIER,
                 )
+
+            if vol_ratio > VOL_GATE_MULTIPLIER:
                 continue
 
         # Fetch real stock price
@@ -527,8 +567,10 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
             logger.debug(f"Skip {symbol}: sl_dist=0")
             continue
 
+        _log_vol_gate_summary()
         return sig
 
+    _log_vol_gate_summary()
     return None
 
 

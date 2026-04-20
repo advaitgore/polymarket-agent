@@ -27,6 +27,8 @@ from config import (
     LOG_FILE,
     LOG_DIR,
     ADAPTIVE_MAPPING_ENABLED,
+    VOL_GATE_ENABLED,
+    VOL_GATE_MULTIPLIER,
 )
 from db_init import init_db, init_csv_files
 from fetch_markets import run_fetch_cycle
@@ -161,6 +163,13 @@ def run_cycle(cycle_num: int, run_adapt: bool = False) -> int:
     try:
         logger.info("[5/6] Evaluating trade opportunity...")
         logger.info("[5/6] Trade path confirmed: market-hours gate already passed for this cycle.")
+        if VOL_GATE_ENABLED and VOL_GATE_MULTIPLIER > 0:
+            logger.info(
+                "[5/6] Vol gate enabled: block symbol if 1d/30d realized-vol ratio > %.2fx",
+                VOL_GATE_MULTIPLIER,
+            )
+        else:
+            logger.info("[5/6] Vol gate disabled for this cycle")
         best = select_best_signal(signals)
         if best:
             logger.info(
