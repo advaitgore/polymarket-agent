@@ -63,7 +63,7 @@ from config import (
     SIM_EXECUTION_VENUE, SIM_BROKER,
     ACCOUNT_EQUITY_USD, RISK_PCT, RR_MIN,
     MAX_OPEN_POSITIONS, MAX_HOLD_TRADING_DAYS, DEFAULT_SL_FRACTION,
-    MARKET_SIGNAL_COOLDOWN_HOURS,
+    MARKET_SIGNAL_COOLDOWN_HOURS, SYMBOL_REENTRY_COOLDOWN_HOURS,
     VOL_GATE_ENABLED, VOL_GATE_MULTIPLIER,
 )
 
@@ -415,6 +415,53 @@ def _load_market_signal_cooldowns(now_utc: datetime) -> Dict[Tuple[str, str], fl
     return cooldowns
 
 
+def _load_symbol_reentry_cooldowns(now_utc: datetime) -> Dict[str, float]:
+    """
+    Return active symbol cooldowns as {symbol: remaining_hours} based on
+    recently CLOSED trades in trades.csv.
+    """
+    cooldowns: Dict[str, float] = {}
+    if SYMBOL_REENTRY_COOLDOWN_HOURS <= 0:
+        return cooldowns
+
+    try:
+        df = _load_trades_df(normalize=True)
+    except Exception as e:
+        logger.warning(f"Could not read trades for symbol cooldowns: {e}")
+        return cooldowns
+
+    if df.empty:
+        return cooldowns
+
+    closed_df = df[df["status"] == "CLOSED"]
+    if closed_df.empty:
+        return cooldowns
+
+    for _, row in closed_df.iterrows():
+        symbol = str(row.get("symbol", "")).strip().upper()
+        if not symbol:
+            continue
+
+        close_ts_raw = row.get("close_date", "")
+        if not close_ts_raw or str(close_ts_raw).lower() == "nan":
+            close_ts_raw = row.get("timestamp", "")
+
+        close_ts = _parse_iso_utc(close_ts_raw)
+        if close_ts is None:
+            continue
+
+        elapsed_hours = (now_utc - close_ts).total_seconds() / 3600.0
+        remaining = SYMBOL_REENTRY_COOLDOWN_HOURS - elapsed_hours
+        if remaining <= 0:
+            continue
+
+        prev = cooldowns.get(symbol)
+        if prev is None or remaining > prev:
+            cooldowns[symbol] = remaining
+
+    return cooldowns
+
+
 def _record_market_signal_cooldown(
     market_id: str,
     side: str,
@@ -447,8 +494,23 @@ def _record_market_signal_cooldown(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def determine_side(signal: Dict) -> str:
-    """BUY if the probability moved up (outcome more likely), SELL otherwise."""
-    return "BUY" if signal.get("change_pp", 0) > 0 else "SELL"
+    """
+    Determine side from probability direction + inferred outcome sentiment.
+
+    outcome_sentiment:
+      - bullish: rising outcome probability implies BUY bias
+      - bearish: rising outcome probability implies SELL bias
+    """
+    change_pp = float(signal.get("change_pp", 0.0) or 0.0)
+    outcome_sentiment = str(signal.get("outcome_sentiment", "")).strip().lower()
+
+    if outcome_sentiment not in {"bullish", "bearish"}:
+        return "BUY" if change_pp > 0 else "SELL"
+
+    prob_up_is_buy = outcome_sentiment == "bullish"
+    if change_pp > 0:
+        return "BUY" if prob_up_is_buy else "SELL"
+    return "SELL" if prob_up_is_buy else "BUY"
 
 
 def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
@@ -463,6 +525,7 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
     open_positions = load_open_positions()
     now_utc = datetime.now(timezone.utc)
     active_cooldowns = _load_market_signal_cooldowns(now_utc)
+    active_symbol_cooldowns = _load_symbol_reentry_cooldowns(now_utc)
 
     tradable = [
         s for s in signals
@@ -520,6 +583,16 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
         side = determine_side(sig).upper()
 
         if symbol in open_positions:
+            continue
+
+        symbol_remaining = active_symbol_cooldowns.get(symbol)
+        if symbol_remaining is not None:
+            logger.info(
+                "Skip %s [%s]: symbol cooldown active for %.2fh",
+                symbol,
+                side,
+                symbol_remaining,
+            )
             continue
 
         if market_id:

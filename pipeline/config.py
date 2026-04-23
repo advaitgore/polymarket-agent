@@ -38,6 +38,10 @@ NEAR_RESOLVED_PROB_HIGH = 0.90
 # Cooldown to avoid repeatedly trading the same market-side signal every cycle.
 MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
 
+# Cooldown to avoid immediate flip trades on the same symbol after a close.
+# Applied regardless of market_id or side.
+SYMBOL_REENTRY_COOLDOWN_HOURS = 24.0
+
 # ── Simulated trade execution (no broker) ────────────────────────────────────
 # All trades are local simulations.  No network connection to any broker.
 # Fills use the most recent price from markets.db (outcomes.current_price).

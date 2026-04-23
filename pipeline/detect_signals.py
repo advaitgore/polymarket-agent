@@ -246,6 +246,159 @@ def find_instrument(market_question: str) -> Tuple[str, str, str]:
     return instrument, direction, theme
 
 
+def direction_logic_for_theme(theme_id: str) -> str:
+    """Return configured direction logic for a classified theme."""
+    if not theme_id or theme_id == "none":
+        return "higher_prob_positive_outcome_means_long"
+
+    themes, _ = get_themes_and_patterns()
+    for entry in themes:
+        if entry.get("theme") == theme_id:
+            return entry.get("direction_logic", "higher_prob_positive_outcome_means_long")
+
+    return "higher_prob_positive_outcome_means_long"
+
+
+POSITIVE_OUTCOME_LABELS = {
+    "yes", "y", "true", "up", "higher", "increase", "bull", "long", "pass", "win"
+}
+
+NEGATIVE_OUTCOME_LABELS = {
+    "no", "n", "false", "down", "lower", "decrease", "bear", "short", "fail", "lose"
+}
+
+
+DIRECTION_HINTS = {
+    "higher_prob_supply_shock_or_escalation_means_long": {
+        "bullish": [
+            r"supply shock", r"disruption", r"strait of hormuz", r"escalat", r"attack", r"strike",
+            r"conflict", r"war", r"sanction", r"blockade",
+        ],
+        "bearish": [
+            r"ceasefire", r"peace", r"de-escalat", r"truce", r"normal", r"resume", r"open shipping",
+            r"end of military operations",
+        ],
+    },
+    "higher_prob_escalation_means_long": {
+        "bullish": [
+            r"escalat", r"attack", r"strike", r"missile", r"conflict", r"war", r"military operation",
+            r"sanction",
+        ],
+        "bearish": [
+            r"ceasefire", r"peace", r"de-escalat", r"truce", r"diplom", r"deal", r"withdraw",
+            r"end of military operations",
+        ],
+    },
+    "higher_prob_rate_cut_or_soft_landing_means_long_tlt": {
+        "bullish": [
+            r"rate cut", r"cut rates", r"fed cut", r"dovish", r"soft landing", r"disinflation",
+            r"cooling inflation", r"lower yields", r"easing",
+        ],
+        "bearish": [
+            r"rate hike", r"hike rates", r"hawkish", r"higher yields", r"inflation spike",
+            r"sticky inflation", r"no rate cut",
+        ],
+    },
+    "higher_prob_permissive_regulation_or_positive_earnings_means_long": {
+        "bullish": [
+            r"approve", r"approval", r"permissive", r"deregulat", r"positive earnings", r"earnings beat",
+            r"beat estimates", r"guidance raise",
+        ],
+        "bearish": [
+            r"ban", r"crackdown", r"restrict", r"antitrust", r"fine", r"earnings miss", r"guidance cut",
+            r"lawsuit",
+        ],
+    },
+    "higher_prob_positive_crypto_outcome_means_long": {
+        "bullish": [
+            r"approve", r"approval", r"adoption", r"institutional", r"inflows", r"all-time high",
+            r"bull market",
+        ],
+        "bearish": [
+            r"ban", r"crackdown", r"exploit", r"hack", r"lawsuit", r"rejection", r"delist",
+        ],
+    },
+}
+
+CASE_BY_CASE_BULLISH_HINTS = [
+    r"ceasefire", r"peace", r"de-escalat", r"truce", r"deal", r"end of military operations",
+    r"budget deal", r"avoid shutdown", r"stimulus", r"tax cut", r"deregulat",
+]
+
+CASE_BY_CASE_BEARISH_HINTS = [
+    r"escalat", r"attack", r"strike", r"war", r"shutdown", r"default", r"tariff", r"sanction",
+    r"recession", r"hard landing", r"impeach", r"crisis",
+]
+
+
+def _count_pattern_hits(question: str, patterns: List[str]) -> int:
+    q = question.lower()
+    hits = 0
+    for pattern in patterns:
+        try:
+            if re.search(pattern, q):
+                hits += 1
+        except re.error:
+            if pattern in q:
+                hits += 1
+    return hits
+
+
+def _outcome_is_affirmative(outcome_name: str) -> Optional[bool]:
+    label = str(outcome_name).strip().lower()
+    if label in POSITIVE_OUTCOME_LABELS:
+        return True
+    if label in NEGATIVE_OUTCOME_LABELS:
+        return False
+    return None
+
+
+def _event_is_bullish_for_symbol(market_question: str, direction_logic: str) -> Optional[bool]:
+    logic = str(direction_logic or "").strip().lower()
+
+    if logic == "higher_prob_positive_outcome_means_long":
+        return True
+
+    if logic == "case_by_case":
+        bullish_hits = _count_pattern_hits(market_question, CASE_BY_CASE_BULLISH_HINTS)
+        bearish_hits = _count_pattern_hits(market_question, CASE_BY_CASE_BEARISH_HINTS)
+    else:
+        hints = DIRECTION_HINTS.get(logic)
+        if hints is None:
+            return True if "means_long" in logic else None
+
+        bullish_hits = _count_pattern_hits(market_question, hints["bullish"])
+        bearish_hits = _count_pattern_hits(market_question, hints["bearish"])
+
+    if bullish_hits == bearish_hits:
+        return None
+    return bullish_hits > bearish_hits
+
+
+def infer_outcome_sentiment(
+    market_question: str,
+    outcome_name: str,
+    direction_logic: str,
+) -> str:
+    """
+    Returns how a rise in this outcome's probability should map to the instrument:
+      - "bullish" -> prob-up implies BUY bias
+      - "bearish" -> prob-up implies SELL bias
+    """
+    event_bullish = _event_is_bullish_for_symbol(market_question, direction_logic)
+    outcome_affirmative = _outcome_is_affirmative(outcome_name)
+
+    if event_bullish is None:
+        return "bullish"
+
+    if outcome_affirmative is None:
+        prob_up_is_bullish = event_bullish
+    else:
+        prob_up_is_bullish = event_bullish if outcome_affirmative else (not event_bullish)
+
+    return "bullish" if prob_up_is_bullish else "bearish"
+
+
 def _parse_db_timestamp(raw_ts: str) -> Optional[datetime]:
     """Parse SQLite timestamp strings into UTC-aware datetimes."""
     try:
@@ -367,10 +520,12 @@ def compute_edge_score(
     prob_change_pp: float,
     hours_since_move: float = 12.0,
     explained: bool = False,
+    direction_logic: str = "",
 ) -> float:
     base = abs(prob_change_pp) / 5.0
     recency = 1.5 if hours_since_move <= 6 else (1.2 if hours_since_move <= 12 else 1.0)
-    return round(base * recency, 3)
+    confidence = 0.5 if str(direction_logic).strip().lower() == "case_by_case" else 1.0
+    return round(base * recency * confidence, 3)
 
 
 def run_signal_detection() -> List[Dict]:
@@ -420,10 +575,13 @@ def run_signal_detection() -> List[Dict]:
             )
 
             theme, trade_eligible, instrument = classify_signal(question)
+            direction_logic = direction_logic_for_theme(theme)
+            outcome_sentiment = infer_outcome_sentiment(question, outcome_name, direction_logic)
             edge_score = compute_edge_score(
                 change_pp,
                 hours_since_move=hours_since_move,
                 explained=False,
+                direction_logic=direction_logic,
             )
 
             signal = {
@@ -437,6 +595,8 @@ def run_signal_detection() -> List[Dict]:
                 "theme":                theme,
                 "trade_eligible":       trade_eligible,
                 "edge_score":           edge_score,
+                "direction_logic":      direction_logic,
+                "outcome_sentiment":    outcome_sentiment,
                 "explained":            False,
                 "news_summary":         "",
                 "news_check_method":    "unverified",

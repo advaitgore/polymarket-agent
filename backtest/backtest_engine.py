@@ -47,6 +47,7 @@ SIGNAL_THRESHOLD_PP  = 3.0        # minimum probability change in percentage poi
 MAX_HOLD_BARS        = 10 * 26    # ~10 trading days × 26 fifteen-minute bars per day
 MIN_HISTORY_HOURS_FOR_SIGNAL = 12.0
 MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
+SYMBOL_REENTRY_COOLDOWN_HOURS = 24.0
 NEAR_RESOLVED_PROB_LOW = 0.10
 NEAR_RESOLVED_PROB_HIGH = 0.90
 
@@ -218,14 +219,181 @@ def classify_question(question: str) -> Tuple[str, str]:
     return best_theme, best_entry.get("primary_ticker", "NONE")
 
 
+def direction_logic_for_theme(theme_id: str) -> str:
+    """Return configured direction_logic for the classified theme."""
+    if not theme_id or theme_id == "none":
+        return "higher_prob_positive_outcome_means_long"
+
+    themes, _ = get_themes()
+    for entry in themes:
+        if entry.get("theme") == theme_id:
+            return entry.get("direction_logic", "higher_prob_positive_outcome_means_long")
+
+    return "higher_prob_positive_outcome_means_long"
+
+
+POSITIVE_OUTCOME_LABELS = {
+    "yes", "y", "true", "up", "higher", "increase", "bull", "long", "pass", "win"
+}
+
+NEGATIVE_OUTCOME_LABELS = {
+    "no", "n", "false", "down", "lower", "decrease", "bear", "short", "fail", "lose"
+}
+
+
+DIRECTION_HINTS = {
+    "higher_prob_supply_shock_or_escalation_means_long": {
+        "bullish": [
+            r"supply shock", r"disruption", r"strait of hormuz", r"escalat", r"attack", r"strike",
+            r"conflict", r"war", r"sanction", r"blockade",
+        ],
+        "bearish": [
+            r"ceasefire", r"peace", r"de-escalat", r"truce", r"normal", r"resume", r"open shipping",
+            r"end of military operations",
+        ],
+    },
+    "higher_prob_escalation_means_long": {
+        "bullish": [
+            r"escalat", r"attack", r"strike", r"missile", r"conflict", r"war", r"military operation",
+            r"sanction",
+        ],
+        "bearish": [
+            r"ceasefire", r"peace", r"de-escalat", r"truce", r"diplom", r"deal", r"withdraw",
+            r"end of military operations",
+        ],
+    },
+    "higher_prob_rate_cut_or_soft_landing_means_long_tlt": {
+        "bullish": [
+            r"rate cut", r"cut rates", r"fed cut", r"dovish", r"soft landing", r"disinflation",
+            r"cooling inflation", r"lower yields", r"easing",
+        ],
+        "bearish": [
+            r"rate hike", r"hike rates", r"hawkish", r"higher yields", r"inflation spike",
+            r"sticky inflation", r"no rate cut",
+        ],
+    },
+    "higher_prob_permissive_regulation_or_positive_earnings_means_long": {
+        "bullish": [
+            r"approve", r"approval", r"permissive", r"deregulat", r"positive earnings", r"earnings beat",
+            r"beat estimates", r"guidance raise",
+        ],
+        "bearish": [
+            r"ban", r"crackdown", r"restrict", r"antitrust", r"fine", r"earnings miss", r"guidance cut",
+            r"lawsuit",
+        ],
+    },
+    "higher_prob_positive_crypto_outcome_means_long": {
+        "bullish": [
+            r"approve", r"approval", r"adoption", r"institutional", r"inflows", r"all-time high",
+            r"bull market",
+        ],
+        "bearish": [
+            r"ban", r"crackdown", r"exploit", r"hack", r"lawsuit", r"rejection", r"delist",
+        ],
+    },
+}
+
+CASE_BY_CASE_BULLISH_HINTS = [
+    r"ceasefire", r"peace", r"de-escalat", r"truce", r"deal", r"end of military operations",
+    r"budget deal", r"avoid shutdown", r"stimulus", r"tax cut", r"deregulat",
+]
+
+CASE_BY_CASE_BEARISH_HINTS = [
+    r"escalat", r"attack", r"strike", r"war", r"shutdown", r"default", r"tariff", r"sanction",
+    r"recession", r"hard landing", r"impeach", r"crisis",
+]
+
+
+def _count_pattern_hits(question: str, patterns: List[str]) -> int:
+    q = question.lower()
+    hits = 0
+    for pattern in patterns:
+        try:
+            if re.search(pattern, q):
+                hits += 1
+        except re.error:
+            if pattern in q:
+                hits += 1
+    return hits
+
+
+def _outcome_is_affirmative(outcome_name: str) -> Optional[bool]:
+    label = str(outcome_name).strip().lower()
+    if label in POSITIVE_OUTCOME_LABELS:
+        return True
+    if label in NEGATIVE_OUTCOME_LABELS:
+        return False
+    return None
+
+
+def _event_is_bullish_for_symbol(question: str, direction_logic: str) -> Optional[bool]:
+    logic = str(direction_logic or "").strip().lower()
+
+    if logic == "higher_prob_positive_outcome_means_long":
+        return True
+
+    if logic == "case_by_case":
+        bullish_hits = _count_pattern_hits(question, CASE_BY_CASE_BULLISH_HINTS)
+        bearish_hits = _count_pattern_hits(question, CASE_BY_CASE_BEARISH_HINTS)
+    else:
+        hints = DIRECTION_HINTS.get(logic)
+        if hints is None:
+            return True if "means_long" in logic else None
+
+        bullish_hits = _count_pattern_hits(question, hints["bullish"])
+        bearish_hits = _count_pattern_hits(question, hints["bearish"])
+
+    if bullish_hits == bearish_hits:
+        return None
+    return bullish_hits > bearish_hits
+
+
+def infer_outcome_sentiment(
+    market_question: str,
+    outcome_name: str,
+    direction_logic: str,
+) -> str:
+    """
+    Returns how a rise in this outcome's probability should map to the symbol:
+      - bullish: prob-up implies BUY bias
+      - bearish: prob-up implies SELL bias
+    """
+    event_bullish = _event_is_bullish_for_symbol(market_question, direction_logic)
+    outcome_affirmative = _outcome_is_affirmative(outcome_name)
+
+    if event_bullish is None:
+        return "bullish"
+
+    if outcome_affirmative is None:
+        prob_up_is_bullish = event_bullish
+    else:
+        prob_up_is_bullish = event_bullish if outcome_affirmative else (not event_bullish)
+
+    return "bullish" if prob_up_is_bullish else "bearish"
+
+
+def determine_side(delta_pp: float, outcome_sentiment: str) -> str:
+    """Determine trade side from move direction + inferred sentiment."""
+    sentiment = str(outcome_sentiment).strip().lower()
+    if sentiment not in {"bullish", "bearish"}:
+        return "BUY" if delta_pp > 0 else "SELL"
+
+    prob_up_is_buy = sentiment == "bullish"
+    if delta_pp > 0:
+        return "BUY" if prob_up_is_buy else "SELL"
+    return "SELL" if prob_up_is_buy else "BUY"
+
+
 def compute_edge_score(
     prob_change_pp: float,
     hours_since_move: float = 12.0,
     explained: bool = False,
+    direction_logic: str = "",
 ) -> float:
     base = abs(prob_change_pp) / 5.0
     recency = 1.5 if hours_since_move <= 6 else (1.2 if hours_since_move <= 12 else 1.0)
-    return round(base * recency, 3)
+    confidence = 0.5 if str(direction_logic).strip().lower() == "case_by_case" else 1.0
+    return round(base * recency * confidence, 3)
 
 
 def get_24h_delta_with_anchor(
@@ -379,6 +547,7 @@ def run_backtest():
     signals_generated = 0
     signals_traded = 0
     market_side_last_trade_ts: Dict[Tuple[str, str], pd.Timestamp] = {}
+    symbol_last_close_ts: Dict[str, pd.Timestamp] = {}
 
     vol_gate_suppressed = 0
     vol_gate_suppressed_by_symbol: Dict[str, int] = {}
@@ -430,6 +599,7 @@ def run_backtest():
                 pos["close_reason"] = close_reason
                 pos["realized_pnl"] = round(pnl, 4)
                 closed_trades.append(pos)
+                symbol_last_close_ts[sym] = ts
                 log.info(
                     f"  CLOSE {pos['side']:4s} {sym:5s} | {close_reason:9s} | "
                     f"entry=${pos['entry_price']:.2f} exit=${mark:.2f} | "
@@ -458,6 +628,9 @@ def run_backtest():
             row_now = mdf.loc[mdf["timestamp"] <= ts].iloc[-1]
             question = row_now["question"]
             theme, instrument = classify_question(question)
+            direction_logic = direction_logic_for_theme(theme)
+            outcome_name = str(row_now.get("outcome_name", "YES"))
+            outcome_sentiment = infer_outcome_sentiment(question, outcome_name, direction_logic)
             signals_generated += 1
 
             if instrument == "NONE" or instrument not in prices:
@@ -485,6 +658,7 @@ def run_backtest():
                 delta_pp,
                 hours_since_move=hours_since_move,
                 explained=False,
+                direction_logic=direction_logic,
             )
 
             candidate_signals.append({
@@ -494,6 +668,8 @@ def run_backtest():
                 "delta_pp": delta_pp,
                 "question": question,
                 "edge_score": edge_score,
+                "direction_logic": direction_logic,
+                "outcome_sentiment": outcome_sentiment,
                 "hours_since_move": hours_since_move,
                 "anchor_ts": anchor_ts,
             })
@@ -510,7 +686,13 @@ def run_backtest():
             if instrument in open_symbols:
                 continue
 
-            side_preview = "BUY" if sig["delta_pp"] > 0 else "SELL"
+            recent_close_ts = symbol_last_close_ts.get(instrument)
+            if recent_close_ts is not None:
+                elapsed_symbol_hours = (ts - recent_close_ts).total_seconds() / 3600.0
+                if elapsed_symbol_hours < SYMBOL_REENTRY_COOLDOWN_HOURS:
+                    continue
+
+            side_preview = determine_side(sig["delta_pp"], sig.get("outcome_sentiment", ""))
             cooldown_key = (sig["market_id"], side_preview)
             last_ts = market_side_last_trade_ts.get(cooldown_key)
             if last_ts is not None:
@@ -525,7 +707,7 @@ def run_backtest():
             continue
 
         # ── 4. TRADE SIZING ───────────────────────────────────────────────
-        side = "BUY" if selected["delta_pp"] > 0 else "SELL"
+        side = determine_side(selected["delta_pp"], selected.get("outcome_sentiment", ""))
         market_side_last_trade_ts[(selected["market_id"], side)] = ts
 
         entry = prices[selected["instrument"]]
@@ -562,6 +744,8 @@ def run_backtest():
             "realized_pnl": 0.0,
             "market_question": selected["question"][:80],
             "theme": selected["theme"],
+            "direction_logic": selected.get("direction_logic", ""),
+            "outcome_sentiment": selected.get("outcome_sentiment", ""),
             "delta_pp": round(selected["delta_pp"], 2),
             "edge_score": selected["edge_score"],
             "hours_since_move": round(selected["hours_since_move"], 2),
@@ -590,6 +774,7 @@ def run_backtest():
         pos["close_reason"] = "BACKTEST_END"
         pos["realized_pnl"] = round(pnl, 4)
         closed_trades.append(pos)
+        symbol_last_close_ts[pos["symbol"]] = last_ts
 
     # ── Results ───────────────────────────────────────────────────────────────
     print_results(closed_trades, equity, signals_generated, signals_traded)
