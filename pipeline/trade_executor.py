@@ -64,6 +64,9 @@ from config import (
     ACCOUNT_EQUITY_USD, RISK_PCT, RR_MIN,
     MAX_OPEN_POSITIONS, MAX_HOLD_TRADING_DAYS, DEFAULT_SL_FRACTION,
     MARKET_SIGNAL_COOLDOWN_HOURS, SYMBOL_REENTRY_COOLDOWN_HOURS,
+    FACTOR_BUCKETS,
+    ATR_LOOKBACK_DAYS, ATR_MULTIPLIER,
+    MIN_HOLD_MARKET_HOURS,
     VOL_GATE_ENABLED, VOL_GATE_MULTIPLIER,
 )
 
@@ -142,6 +145,10 @@ _PRICE_CACHE: Dict[str, float] = {}
 _PRICE_CACHE_TS: Dict[str, float] = {}   # per-symbol timestamps
 _PRICE_CACHE_TTL: float = 60.0   # seconds before re-fetching
 
+# Daily close cache for ATR (longer TTL)
+_DAILY_CLOSE_CACHE: Dict[str, Tuple[float, List[float]]] = {}
+_DAILY_CLOSE_TTL: float = 6 * 3600.0
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Real stock price via Yahoo Finance (public, no auth)
@@ -214,6 +221,15 @@ def invalidate_price_cache():
     """Force fresh price fetch on next call (all symbols)."""
     global _PRICE_CACHE_TS
     _PRICE_CACHE_TS = {}
+
+
+def _build_factor_bucket_map() -> Dict[str, str]:
+    """Return {symbol: bucket_name} for configured factor buckets."""
+    bucket_map: Dict[str, str] = {}
+    for bucket, symbols in FACTOR_BUCKETS.items():
+        for sym in symbols:
+            bucket_map[str(sym).upper()] = bucket
+    return bucket_map
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -312,6 +328,64 @@ def estimate_stock_volatility(symbol: str) -> float:
         "ITA":   0.03,
     }
     return VOL_OVERRIDES.get(symbol, DEFAULT_SL_FRACTION)
+
+
+def _get_daily_closes(symbol: str, lookback_days: int) -> Optional[List[float]]:
+    """Fetch daily close prices from Yahoo; returns newest-to-oldest list."""
+    now = time.time()
+    cache = _DAILY_CLOSE_CACHE.get(symbol)
+    if cache and (now - cache[0]) < _DAILY_CLOSE_TTL:
+        return cache[1]
+
+    range_days = max(lookback_days * 3, 60)
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        f"?interval=1d&range={range_days}d"
+    )
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; PolymarketTrader/1.0)"}
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        closes = data["chart"]["result"][0]["indicators"]["quote"][0]["close"]
+        closes = [float(c) for c in closes if c is not None]
+        if len(closes) < lookback_days + 1:
+            return None
+        closes = list(reversed(closes))
+        _DAILY_CLOSE_CACHE[symbol] = (now, closes)
+        return closes
+    except Exception as e:
+        logger.warning(f"ATR daily close fetch failed for {symbol}: {e}")
+        return None
+
+
+def compute_atr_stop_distance(symbol: str, entry_price: float) -> float:
+    """
+    Returns stop distance in dollars using ATR (close-to-close proxy).
+    Falls back to DEFAULT_SL_FRACTION if ATR unavailable.
+    """
+    fallback = entry_price * DEFAULT_SL_FRACTION
+    closes = _get_daily_closes(symbol, ATR_LOOKBACK_DAYS)
+    if not closes:
+        logger.warning(f"ATR fallback for {symbol}: using DEFAULT_SL_FRACTION")
+        return fallback
+
+    # Use absolute close-to-close changes as ATR proxy.
+    diffs = [abs(closes[i] - closes[i + 1]) for i in range(len(closes) - 1)]
+    if len(diffs) < ATR_LOOKBACK_DAYS:
+        logger.warning(f"ATR fallback for {symbol}: insufficient daily history")
+        return fallback
+
+    atr = sum(diffs[:ATR_LOOKBACK_DAYS]) / float(ATR_LOOKBACK_DAYS)
+    sl_dist = max(atr * ATR_MULTIPLIER, fallback)
+    logger.debug(
+        "ATR stop %s: atr=%.2f mult=%.2f sl_dist=%.2f",
+        symbol,
+        atr,
+        ATR_MULTIPLIER,
+        sl_dist,
+    )
+    return sl_dist
 
 
 def compute_live_vol_ratio(symbol: str, lookback_days: int = 30) -> float:
@@ -526,6 +600,12 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
     now_utc = datetime.now(timezone.utc)
     active_cooldowns = _load_market_signal_cooldowns(now_utc)
     active_symbol_cooldowns = _load_symbol_reentry_cooldowns(now_utc)
+    bucket_map = _build_factor_bucket_map()
+    open_buckets = {
+        bucket_map.get(sym.upper())
+        for sym in open_positions.keys()
+        if bucket_map.get(sym.upper())
+    }
 
     tradable = [
         s for s in signals
@@ -585,6 +665,11 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
         if symbol in open_positions:
             continue
 
+        bucket = bucket_map.get(symbol.upper())
+        if bucket and bucket in open_buckets:
+            logger.info("Skip %s [%s]: factor bucket '%s' already occupied", symbol, side, bucket)
+            continue
+
         symbol_remaining = active_symbol_cooldowns.get(symbol)
         if symbol_remaining is not None:
             logger.info(
@@ -627,14 +712,22 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
             if vol_ratio > VOL_GATE_MULTIPLIER:
                 continue
 
+            # Continuous sizing: scale risk for elevated vol below hard block.
+            if vol_ratio >= 1.5:
+                sig["risk_pct_override"] = RISK_PCT * 0.5
+            elif vol_ratio >= 1.25:
+                sig["risk_pct_override"] = RISK_PCT * 0.75
+            else:
+                sig["risk_pct_override"] = RISK_PCT
+            sig["vol_ratio"] = vol_ratio
+
         # Fetch real stock price
         entry = get_stock_price(symbol)
         if entry is None:
             logger.debug(f"Skip {symbol}: could not fetch stock price")
             continue
 
-        sl_frac = estimate_stock_volatility(symbol)
-        sl_dist = entry * sl_frac
+        sl_dist = compute_atr_stop_distance(symbol, entry)
 
         if sl_dist <= 0:
             logger.debug(f"Skip {symbol}: sl_dist=0")
@@ -681,8 +774,7 @@ def place_paper_trade(signal: Dict) -> Optional[Dict]:
     entry = get_stock_price_with_fallback(symbol)
     logger.info(f"Stock price fetch: {symbol} = ${entry:.2f}")
 
-    sl_frac   = estimate_stock_volatility(symbol)
-    sl_dist   = entry * sl_frac
+    sl_dist   = compute_atr_stop_distance(symbol, entry)
     tp_dist   = sl_dist * RR_MIN
 
     if sl_dist <= 0:
@@ -690,7 +782,8 @@ def place_paper_trade(signal: Dict) -> Optional[Dict]:
         return None
 
     equity       = current_equity()
-    risk_dollar  = RISK_PCT * equity          # $10 on a $1,000 account
+    effective_risk_pct = float(signal.get("risk_pct_override", RISK_PCT))
+    risk_dollar  = effective_risk_pct * equity          # $10 on a $1,000 account
     qty_risk     = risk_dollar / sl_dist      # risk-based quantity
 
     quantity = round(qty_risk, 6)  # fractional shares, risk-sized only
@@ -836,8 +929,14 @@ def update_mark_prices():
 
         # ── Close trigger checks ──────────────────────────────────────────
         close_reason = _check_close_triggers(
-            side=side, mark=mark, sl=sl, tp=tp,
-            open_date=open_date
+            side=side,
+            mark=mark,
+            sl=sl,
+            tp=tp,
+            open_date=open_date,
+            entry=entry,
+            now_utc=datetime.now(timezone.utc),
+            min_hold_hours=MIN_HOLD_MARKET_HOURS,
         )
 
         if close_reason:
@@ -876,6 +975,9 @@ def _check_close_triggers(
     side: str, mark: float,
     sl: Optional[float], tp: Optional[float],
     open_date: str,
+    entry: float,
+    now_utc: datetime,
+    min_hold_hours: float,
 ) -> Optional[str]:
     """
     Return the close reason string if any trigger fires, else None.
@@ -889,14 +991,27 @@ def _check_close_triggers(
     if days_open > MAX_HOLD_TRADING_DAYS:
         return "TIME_EXIT"
 
+    hours_open = 0.0
+    opened = _parse_iso_utc(open_date)
+    if opened is not None:
+        hours_open = max(0.0, (now_utc - opened).total_seconds() / 3600.0)
+
     if sl is not None and tp is not None:
         if side == "BUY":
             if mark <= sl:
+                sl_dist = abs(entry - sl)
+                loss = max(0.0, entry - mark)
+                if hours_open < min_hold_hours and sl_dist > 0 and loss < (2.0 * sl_dist):
+                    return None
                 return "SL_HIT"
             if mark >= tp:
                 return "TP_HIT"
         else:  # SELL
             if mark >= sl:
+                sl_dist = abs(sl - entry)
+                loss = max(0.0, mark - entry)
+                if hours_open < min_hold_hours and sl_dist > 0 and loss < (2.0 * sl_dist):
+                    return None
                 return "SL_HIT"
             if mark <= tp:
                 return "TP_HIT"

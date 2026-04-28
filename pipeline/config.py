@@ -42,6 +42,15 @@ MARKET_SIGNAL_COOLDOWN_HOURS = 24.0
 # Applied regardless of market_id or side.
 SYMBOL_REENTRY_COOLDOWN_HOURS = 24.0
 
+# Factor bucket cap: allow at most one open position per bucket.
+FACTOR_BUCKETS = {
+  "equity_index": ["SPY", "QQQ", "IWM"],
+  "energy":       ["XLE", "XOM", "CVX", "USO"],
+  "defense":      ["LMT", "NOC", "RTX"],
+  "crypto":       ["IBIT", "ETHA"],
+  "tech_single":  ["NVDA", "MSFT", "AAPL", "GOOGL", "META", "AMZN", "TSLA"],
+}
+
 # ── Simulated trade execution (no broker) ────────────────────────────────────
 # All trades are local simulations.  No network connection to any broker.
 # Fills use the most recent price from markets.db (outcomes.current_price).
@@ -81,6 +90,13 @@ MAX_HOLD_TRADING_DAYS   = 10
 # price history is too thin to estimate volatility).
 DEFAULT_SL_FRACTION    = 0.05
 
+# ATR-based stop parameters (daily closes).
+ATR_LOOKBACK_DAYS       = 14
+ATR_MULTIPLIER          = 1.5
+
+# Minimum hold time in market hours before allowing normal SL checks.
+MIN_HOLD_MARKET_HOURS   = 4
+
 # ── Realized-vol gate ──────────────────────────────────────────────────────
 # Suppress signals where correlated instrument 1-day realized vol exceeds
 # this multiple of its recent 30-day average.
@@ -104,7 +120,7 @@ NEWS_CHECK_MAX_PER_CYCLE = 50   # cap per cycle to keep runtime reasonable
 
 # ── Adaptive mapper controls ────────────────────────────────────────────────
 # Disable adaptive routing while hardening live-vs-backtest parity.
-ADAPTIVE_MAPPING_ENABLED = False
+ADAPTIVE_MAPPING_ENABLED = True
 
 # Require a minimum number of closed trades for each (theme, ticker)
 # before applying adaptive weight updates.
