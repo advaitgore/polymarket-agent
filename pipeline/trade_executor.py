@@ -378,7 +378,7 @@ def compute_atr_stop_distance(symbol: str, entry_price: float) -> float:
 
     atr = sum(diffs[:ATR_LOOKBACK_DAYS]) / float(ATR_LOOKBACK_DAYS)
     sl_dist = max(atr * ATR_MULTIPLIER, fallback)
-    logger.debug(
+    logger.info(
         "ATR stop %s: atr=%.2f mult=%.2f sl_dist=%.2f",
         symbol,
         atr,
@@ -783,6 +783,13 @@ def place_paper_trade(signal: Dict) -> Optional[Dict]:
 
     equity       = current_equity()
     effective_risk_pct = float(signal.get("risk_pct_override", RISK_PCT))
+    if "vol_ratio" in signal:
+        logger.info(
+            "Vol sizing %s: ratio=%.2f risk_pct=%.3f",
+            symbol,
+            float(signal.get("vol_ratio", 1.0)),
+            effective_risk_pct,
+        )
     risk_dollar  = effective_risk_pct * equity          # $10 on a $1,000 account
     qty_risk     = risk_dollar / sl_dist      # risk-based quantity
 
@@ -1002,6 +1009,13 @@ def _check_close_triggers(
                 sl_dist = abs(entry - sl)
                 loss = max(0.0, entry - mark)
                 if hours_open < min_hold_hours and sl_dist > 0 and loss < (2.0 * sl_dist):
+                    logger.info(
+                        "Hold gate %s: SL suppressed (hours=%.2f, loss=%.2f < 2x SL %.2f)",
+                        side,
+                        hours_open,
+                        loss,
+                        sl_dist,
+                    )
                     return None
                 return "SL_HIT"
             if mark >= tp:
@@ -1011,6 +1025,13 @@ def _check_close_triggers(
                 sl_dist = abs(sl - entry)
                 loss = max(0.0, mark - entry)
                 if hours_open < min_hold_hours and sl_dist > 0 and loss < (2.0 * sl_dist):
+                    logger.info(
+                        "Hold gate %s: SL suppressed (hours=%.2f, loss=%.2f < 2x SL %.2f)",
+                        side,
+                        hours_open,
+                        loss,
+                        sl_dist,
+                    )
                     return None
                 return "SL_HIT"
             if mark <= tp:
