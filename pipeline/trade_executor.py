@@ -661,8 +661,13 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
         symbol = sig["correlated_instrument"]
         market_id = str(sig.get("market_id", ""))
         side = determine_side(sig).upper()
+        outcome_sentiment = str(sig.get("outcome_sentiment", "")).strip().lower()
 
         if symbol in open_positions:
+            continue
+
+        if outcome_sentiment == "neutral":
+            logger.info("Skip %s [%s]: outcome sentiment neutral", symbol, side)
             continue
 
         bucket = bucket_map.get(symbol.upper())

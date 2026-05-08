@@ -326,7 +326,45 @@ def _outcome_is_affirmative(outcome_name: str) -> Optional[bool]:
     return None
 
 
-def _event_is_bullish_for_symbol(question: str, direction_logic: str) -> Optional[bool]:
+def _resolve_tie_from_outcome(
+    market_question: str,
+    outcome_name: str,
+    direction_logic: str,
+) -> Optional[bool]:
+    """
+    When keyword matching ties, use outcome name to resolve direction.
+
+    Returns True if event is bullish for the instrument, False if bearish,
+    or None if ambiguous.
+    """
+    hints = DIRECTION_HINTS.get(str(direction_logic or "").strip().lower(), {})
+    if not hints:
+        return None
+
+    bearish_present = _count_pattern_hits(market_question, hints.get("bearish", [])) > 0
+    bullish_present = _count_pattern_hits(market_question, hints.get("bullish", [])) > 0
+
+    if bearish_present and not bullish_present:
+        event_is_bearish = True
+    elif bullish_present and not bearish_present:
+        event_is_bearish = False
+    else:
+        return None
+
+    outcome_affirmative = _outcome_is_affirmative(outcome_name)
+    if outcome_affirmative is None:
+        return None
+
+    if event_is_bearish:
+        return False if outcome_affirmative else True
+    return True if outcome_affirmative else False
+
+
+def _event_is_bullish_for_symbol(
+    question: str,
+    direction_logic: str,
+    outcome_name: str = "",
+) -> Optional[bool]:
     logic = str(direction_logic or "").strip().lower()
 
     if logic == "higher_prob_positive_outcome_means_long":
@@ -344,7 +382,7 @@ def _event_is_bullish_for_symbol(question: str, direction_logic: str) -> Optiona
         bearish_hits = _count_pattern_hits(question, hints["bearish"])
 
     if bullish_hits == bearish_hits:
-        return None
+        return _resolve_tie_from_outcome(question, outcome_name, direction_logic)
     return bullish_hits > bearish_hits
 
 
@@ -358,11 +396,11 @@ def infer_outcome_sentiment(
       - bullish: prob-up implies BUY bias
       - bearish: prob-up implies SELL bias
     """
-    event_bullish = _event_is_bullish_for_symbol(market_question, direction_logic)
+    event_bullish = _event_is_bullish_for_symbol(market_question, direction_logic, outcome_name)
     outcome_affirmative = _outcome_is_affirmative(outcome_name)
 
     if event_bullish is None:
-        return "bullish"
+        return "neutral"
 
     if outcome_affirmative is None:
         prob_up_is_bullish = event_bullish
@@ -684,6 +722,9 @@ def run_backtest():
         for sig in candidate_signals:
             instrument = sig["instrument"]
             if instrument in open_symbols:
+                continue
+
+            if str(sig.get("outcome_sentiment", "")).strip().lower() == "neutral":
                 continue
 
             recent_close_ts = symbol_last_close_ts.get(instrument)
