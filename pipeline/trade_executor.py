@@ -995,7 +995,7 @@ def _check_close_triggers(
       TIME_EXIT if trading_days > MAX_HOLD_TRADING_DAYS
     """
     days_open = trading_days_since(open_date)
-    if days_open > MAX_HOLD_TRADING_DAYS:
+    if days_open >= MAX_HOLD_TRADING_DAYS:
         return "TIME_EXIT"
 
     hours_open = 0.0
