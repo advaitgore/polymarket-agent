@@ -124,7 +124,7 @@ ADAPTIVE_MAPPING_ENABLED = True
 
 # Require a minimum number of closed trades for each (theme, ticker)
 # before applying adaptive weight updates.
-ADAPTIVE_MIN_CLOSED_TRADES_PER_THEME_TICKER = 5
+ADAPTIVE_MIN_CLOSED_TRADES_PER_THEME_TICKER = 2
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 LOG_LEVEL = "INFO"
