@@ -2,7 +2,7 @@
   "_meta": {
     "description": "Dynamic weight table for theme-ticker mappings. Managed by adaptive_mapper.py. Higher weight = preferred primary ticker for that theme. Weights start at 1.0 (equal) and are adjusted based on realized P&L outcomes from trades.csv. Weights are normalized per theme before selection. Never drop below MIN_WEIGHT (0.1) or exceed MAX_WEIGHT (5.0).",
     "version": "1.0",
-    "last_updated": "2026-06-02T13:30:07.734881+00:00",
+    "last_updated": "2026-07-02T19:03:44.835930+00:00",
     "cycles_since_last_adapt": 0,
     "adapt_every_n_cycles": 48,
     "min_weight": 0.1,
@@ -10,28 +10,10 @@
     "learning_rate": 0.15
   },
   "weights": {
-    "energy_oil_risk": {
-      "XLE": 1.0,
-      "XOP": 1.0,
-      "USO": 1.0,
-      "XOM": 1.0,
-      "CVX": 1.0
-    },
     "defense_geopolitics": {
       "LMT": 0.6141,
       "NOC": 1.0,
       "RTX": 1.0
-    },
-    "us_elections_policy": {
-      "XLF": 1.0,
-      "XLI": 1.0,
-      "IWM": 1.0
-    },
-    "macro_fed_path": {
-      "TLT": 1.0,
-      "IEF": 1.0,
-      "QQQ": 1.0,
-      "XLF": 1.0
     },
     "tech_ai": {
       "QQQ": 1.0,
@@ -41,10 +23,6 @@
       "GOOGL": 1.0,
       "META": 1.0,
       "AMZN": 1.0
-    },
-    "crypto": {
-      "IBIT": 1.0,
-      "ETHA": 1.0
     },
     "us_politics_macro": {
       "SPY": 1.0
@@ -1370,6 +1348,118 @@
         "macro_fed_path": "TLT",
         "tech_ai": "QQQ",
         "crypto": "IBIT",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-07-02T19:03:44.713481+00:00",
+      "n_adjustments": 3,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 1.385,
+          "closed_trades": 1
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -13.4835,
+          "closed_trades": 3
+        },
+        "crypto_major/IBIT": {
+          "pnl": 9.5464,
+          "closed_trades": 1
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 38.5672,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -2.9128,
+          "closed_trades": 2
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 1.385,
+        "energy_geopolitics/XLE": -13.4835,
+        "crypto_major/IBIT": 9.5464,
+        "us_politics_macro/SPY": 38.5672,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -2.9128,
+        "tech_ai/GOOGL": 7.6664
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-07-02T19:03:44.835930+00:00",
+      "n_adjustments": 3,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 1.385,
+          "closed_trades": 1
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -13.4835,
+          "closed_trades": 3
+        },
+        "crypto_major/IBIT": {
+          "pnl": 9.5464,
+          "closed_trades": 1
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 38.5672,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -2.9128,
+          "closed_trades": 2
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 1.385,
+        "energy_geopolitics/XLE": -13.4835,
+        "crypto_major/IBIT": 9.5464,
+        "us_politics_macro/SPY": 38.5672,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -2.9128,
+        "tech_ai/GOOGL": 7.6664
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
         "us_politics_macro": "SPY",
         "crypto_major": "ETHA",
         "energy_geopolitics": "XLE",

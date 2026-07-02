@@ -71,6 +71,7 @@
         "fossil fuel"
       ],
       "direction_logic": "higher_prob_supply_shock_or_escalation_means_long",
+      "correlation_quality": 0.55,
       "notes": "XLE is primary. Use XOP for E&P-heavy bets, USO for pure WTI proxy, XOM/CVX when question is company-specific. Only flag trade_eligible=true when there is a clear oil/gas price causation."
     },
     {
@@ -128,6 +129,7 @@
         "defense authorization"
       ],
       "direction_logic": "higher_prob_escalation_means_long",
+      "correlation_quality": 0.90,
       "notes": "LMT is primary \u2014 single largest defense contractor. ITA for broad aerospace/defense ETF exposure. Only map if the conflict has clear defense-spending implications at scale."
     },
     {
@@ -219,6 +221,7 @@
         "national debt"
       ],
       "direction_logic": "case_by_case",
+      "correlation_quality": 1.00,
       "non_tradable_signals": [
         "celebrity nominations",
         "joke candidates",
@@ -323,6 +326,7 @@
         "macro data"
       ],
       "direction_logic": "higher_prob_rate_cut_or_soft_landing_means_long_tlt",
+      "correlation_quality": 0.80,
       "notes": "TLT is primary for rate/duration plays. SPY/QQQ for broad equity macro. XLF when banking/rates are the driver. GLD for safe-haven macro shocks."
     },
     {
@@ -401,6 +405,7 @@
         "tesla report"
       ],
       "direction_logic": "higher_prob_permissive_regulation_or_positive_earnings_means_long",
+      "correlation_quality": 0.85,
       "notes": "QQQ for broad AI/tech regulation plays. Individual large-caps when the market question specifically names the company. Do NOT map vague 'AI' questions to instruments without a named company or regulation."
     },
     {
@@ -463,6 +468,7 @@
         "crypto exchange"
       ],
       "direction_logic": "higher_prob_positive_crypto_outcome_means_long",
+      "correlation_quality": 0.85,
       "notes": "IBIT (BlackRock Bitcoin ETF) is primary for Bitcoin questions. ETHA for Ethereum. MSTR as a high-beta Bitcoin proxy. Obscure altcoins, NFTs, and meme coins are NOT trade_eligible."
     }
   ],

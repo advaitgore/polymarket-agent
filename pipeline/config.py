@@ -85,6 +85,17 @@ MAX_EXPOSURE_PCT        = 0.30  # kept for legacy reference, not used for gating
 # Maximum number of trading days a position may stay open before forced close.
 MAX_HOLD_TRADING_DAYS   = 10
 
+# ── Breakeven + trailing stop ────────────────────────────────────────────────
+# Once an open position moves into profit past TRAIL_BREAKEVEN_TRIGGER_PCT of
+# its take-profit distance, the stop is ratcheted to breakeven (entry). Once
+# past TRAIL_STOP_TRIGGER_PCT, the stop trails behind the mark at
+# TRAIL_STOP_DISTANCE_PCT of the TP distance. The stop is never widened
+# (ratchet only). TIME_EXIT at MAX_HOLD_TRADING_DAYS remains the backstop for
+# stagnant positions that never reach the breakeven trigger.
+TRAIL_BREAKEVEN_TRIGGER_PCT = 0.50
+TRAIL_STOP_TRIGGER_PCT      = 0.75
+TRAIL_STOP_DISTANCE_PCT     = 0.40
+
 # Stop‑loss distance expressed as a fraction of the entry price.
 # e.g. 0.05 → stop is 5 % away from entry (used as a fallback when recent
 # price history is too thin to estimate volatility).
@@ -121,6 +132,28 @@ NEWS_CHECK_MAX_PER_CYCLE = 50   # cap per cycle to keep runtime reasonable
 # ── Adaptive mapper controls ────────────────────────────────────────────────
 # Disable adaptive routing while hardening live-vs-backtest parity.
 ADAPTIVE_MAPPING_ENABLED = True
+
+# ── energy_geopolitics theme gate ────────────────────────────────────────────
+# XLE is the loosest proxy in the factor map (25% historical win rate).
+# Require a high edge score before entering, and block case_by_case direction
+# logic entirely. Threshold auto-relaxes once the theme's rolling win rate
+# recovers above ENERGY_GEO_WINRATE_RELAX_TRIGGER.
+ENERGY_GEO_EDGE_THRESHOLD_DEFAULT = 4.5
+ENERGY_GEO_EDGE_THRESHOLD_RELAXED = 3.5
+ENERGY_GEO_WINRATE_RELAX_TRIGGER  = 0.40
+ENERGY_GEO_MIN_TRADES_FOR_GATE    = 2
+
+# ── Edge score instrument-quality adjustment ────────────────────────────────
+# The edge score is multiplied by an instrument_quality factor that blends a
+# static per-theme correlation_quality (from correlations.json) with the
+# theme's rolling historical win rate. This penalizes loose proxy mappings
+# (e.g. XLE for a Hormuz question) and themes with poor track records.
+#   history_factor     = max(0.1, rolling_win_rate)   (1.0 if insufficient data)
+#   instrument_quality = BASE_WEIGHT*correlation_quality + HISTORY_WEIGHT*history_factor
+# Signals whose adjusted edge falls below MIN_EDGE_SCORE are not trade-eligible.
+MIN_EDGE_SCORE                    = 2.0
+INSTRUMENT_QUALITY_HISTORY_WEIGHT = 0.6
+INSTRUMENT_QUALITY_BASE_WEIGHT    = 0.4
 
 # Require a minimum number of closed trades for each (theme, ticker)
 # before applying adaptive weight updates.

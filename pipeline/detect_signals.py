@@ -27,6 +27,7 @@ from config import (
     DB_PATH, SIGNALS_CSV, CORRELATIONS_JSON,
     PRICE_MOVE_THRESHOLD, MIN_HISTORY_HOURS_FOR_SIGNAL,
     NEAR_RESOLVED_PROB_LOW, NEAR_RESOLVED_PROB_HIGH,
+    MIN_EDGE_SCORE, INSTRUMENT_QUALITY_HISTORY_WEIGHT, INSTRUMENT_QUALITY_BASE_WEIGHT,
 )
 
 logger = logging.getLogger(__name__)
@@ -257,6 +258,19 @@ def direction_logic_for_theme(theme_id: str) -> str:
             return entry.get("direction_logic", "higher_prob_positive_outcome_means_long")
 
     return "higher_prob_positive_outcome_means_long"
+
+
+def correlation_quality_for_theme(theme_id: str) -> float:
+    """Return the configured correlation_quality for a theme (default 1.0)."""
+    if not theme_id or theme_id == "none":
+        return 1.0
+
+    themes, _ = get_themes_and_patterns()
+    for entry in themes:
+        if entry.get("theme") == theme_id:
+            return float(entry.get("correlation_quality", 1.0))
+
+    return 1.0
 
 
 POSITIVE_OUTCOME_LABELS = {
@@ -559,11 +573,44 @@ def compute_edge_score(
     hours_since_move: float = 12.0,
     explained: bool = False,
     direction_logic: str = "",
+    instrument_quality: float = 1.0,
 ) -> float:
     base = abs(prob_change_pp) / 5.0
     recency = 1.5 if hours_since_move <= 6 else (1.2 if hours_since_move <= 12 else 1.0)
     confidence = 0.5 if str(direction_logic).strip().lower() == "case_by_case" else 1.0
-    return round(base * recency * confidence, 3)
+    return round(base * recency * confidence * instrument_quality, 3)
+
+
+def compute_instrument_quality(theme: str, correlation_quality: float) -> float:
+    """
+    Blend a static per-theme correlation_quality with the theme's rolling
+    historical win rate to produce a multiplier for the edge score.
+
+        history_factor     = max(0.1, rolling_win_rate)   (1.0 if insufficient data)
+        instrument_quality = BASE_WEIGHT*correlation_quality
+                             + HISTORY_WEIGHT*history_factor
+
+    A theme with a poor track record (low win rate) or a loose proxy mapping
+    (low correlation_quality) produces a lower multiplier, discounting its
+    edge score so fewer of its signals clear MIN_EDGE_SCORE.
+    """
+    # Local import to avoid a circular import at module load time
+    # (trade_executor imports from config/detect are independent, but this
+    # keeps the dependency lazy and safe).
+    try:
+        from trade_executor import compute_theme_win_rate
+        win_rate = compute_theme_win_rate(theme)
+    except Exception as e:
+        logger.warning(f"Could not compute theme win rate for '{theme}': {e}")
+        win_rate = None
+
+    history_factor = 1.0 if win_rate is None else max(0.1, win_rate)
+
+    quality = (
+        INSTRUMENT_QUALITY_BASE_WEIGHT * float(correlation_quality)
+        + INSTRUMENT_QUALITY_HISTORY_WEIGHT * history_factor
+    )
+    return round(quality, 4)
 
 
 def run_signal_detection() -> List[Dict]:
@@ -615,12 +662,30 @@ def run_signal_detection() -> List[Dict]:
             theme, trade_eligible, instrument = classify_signal(question)
             direction_logic = direction_logic_for_theme(theme)
             outcome_sentiment = infer_outcome_sentiment(question, outcome_name, direction_logic)
+            correlation_quality = correlation_quality_for_theme(theme)
+            instrument_quality = compute_instrument_quality(theme, correlation_quality)
             edge_score = compute_edge_score(
                 change_pp,
                 hours_since_move=hours_since_move,
                 explained=False,
                 direction_logic=direction_logic,
+                instrument_quality=instrument_quality,
             )
+
+            # Quality floor: discount-adjusted edges below MIN_EDGE_SCORE are
+            # not trade-eligible (still logged to signals.csv for audit).
+            if trade_eligible and edge_score < MIN_EDGE_SCORE:
+                trade_eligible = False
+                logger.info(
+                    "SIGNAL [QUALITY_FILTERED]: %s [%s] theme=%s "
+                    "adjusted_edge=%.2f < MIN_EDGE_SCORE=%.2f (instr_quality=%.2f)",
+                    question[:50],
+                    outcome_name,
+                    theme,
+                    edge_score,
+                    MIN_EDGE_SCORE,
+                    instrument_quality,
+                )
 
             signal = {
                 "market_id":            market_id,

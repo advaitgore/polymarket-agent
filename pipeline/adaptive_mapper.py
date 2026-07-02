@@ -32,10 +32,63 @@ logger = logging.getLogger(__name__)
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 TRADES_CSV   = os.path.join(BASE_DIR, "data", "trades.csv")
 WEIGHTS_JSON = os.path.join(BASE_DIR, "correlations_weights.json")
+CORRELATIONS_JSON = os.path.join(BASE_DIR, "correlations.json")
 
 MIN_WEIGHT    = 0.1
 MAX_WEIGHT    = 5.0
 LEARNING_RATE = 0.15   # fraction of current weight adjusted per win/loss
+
+
+def _load_allowed_themes() -> set:
+    """
+    Load the canonical set of allowed theme IDs from correlations.json.
+    Falls back to the _meta.allowed_themes list, then to the theme entries.
+    Returns an empty set on any failure (validation becomes a no-op).
+    """
+    try:
+        with open(CORRELATIONS_JSON) as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.warning(f"adaptive_mapper: could not load correlations.json for key validation: {e}")
+        return set()
+
+    meta_allowed = data.get("_meta", {}).get("allowed_themes", [])
+    if meta_allowed:
+        return {str(t) for t in meta_allowed}
+
+    themes = data.get("themes", data.get("markets", []))
+    return {str(entry.get("theme")) for entry in themes if entry.get("theme")}
+
+
+def _validate_and_prune_weight_keys(
+    weights_section: Dict[str, Dict[str, float]],
+    allowed_themes: set,
+) -> Tuple[Dict[str, Dict[str, float]], int]:
+    """
+    Remove any weight keys that are not in the allowed theme set.
+
+    Logs a warning for each stale key removed. If allowed_themes is empty
+    (correlations.json unreadable) this is a no-op to avoid destroying data
+    on a transient read error.
+
+    Returns (pruned_weights_section, pruned_count).
+    """
+    if not allowed_themes:
+        return weights_section, 0
+
+    pruned = 0
+    cleaned: Dict[str, Dict[str, float]] = {}
+    for theme_key, ticker_map in weights_section.items():
+        if theme_key in allowed_themes:
+            cleaned[theme_key] = ticker_map
+        else:
+            pruned += 1
+            logger.warning(
+                "adaptive_mapper: pruning stale weight key '%s' (not in allowed themes)",
+                theme_key,
+            )
+
+    return cleaned, pruned
 
 # ── Load / save weights ───────────────────────────────────────────────────────
 
@@ -196,6 +249,16 @@ def run_adaptive_mapping(force: bool = False) -> bool:
     """
     data = _load_weights_file()
     meta = data.setdefault("_meta", {})
+
+    # Validate + prune stale weight keys before doing anything else.
+    allowed_themes = _load_allowed_themes()
+    pruned_section, pruned_count = _validate_and_prune_weight_keys(
+        data.get("weights", {}), allowed_themes
+    )
+    if pruned_count:
+        data["weights"] = pruned_section
+        logger.info("adaptive_mapper: pruned %d stale weight key(s)", pruned_count)
+
     cycles = meta.get("cycles_since_last_adapt", 0) + 1
     adapt_every = meta.get("adapt_every_n_cycles", 48)
     meta["cycles_since_last_adapt"] = cycles
@@ -289,4 +352,4 @@ if __name__ == "__main__":
     print(f"Weight update ran: {updated}")
     print("Current primary tickers by theme:")
     for theme, ticker in get_current_primary_tickers().items():
-        print(f"  {theme:30s} → {ticker}")
+        print(f"  {theme:30s} -> {ticker}")

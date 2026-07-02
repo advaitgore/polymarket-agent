@@ -68,6 +68,9 @@ from config import (
     ATR_LOOKBACK_DAYS, ATR_MULTIPLIER,
     MIN_HOLD_MARKET_HOURS,
     VOL_GATE_ENABLED, VOL_GATE_MULTIPLIER,
+    ENERGY_GEO_EDGE_THRESHOLD_DEFAULT, ENERGY_GEO_EDGE_THRESHOLD_RELAXED,
+    ENERGY_GEO_WINRATE_RELAX_TRIGGER, ENERGY_GEO_MIN_TRADES_FOR_GATE,
+    TRAIL_BREAKEVEN_TRIGGER_PCT, TRAIL_STOP_TRIGGER_PCT, TRAIL_STOP_DISTANCE_PCT,
 )
 
 logger = logging.getLogger(__name__)
@@ -587,6 +590,39 @@ def determine_side(signal: Dict) -> str:
     return "SELL" if prob_up_is_buy else "BUY"
 
 
+def compute_theme_win_rate(theme: str) -> Optional[float]:
+    """
+    Rolling win rate for a theme computed from CLOSED trades in trades.csv.
+
+    A "win" is a closed trade with realized_pnl > 0. Returns wins / total,
+    or None if fewer than ENERGY_GEO_MIN_TRADES_FOR_GATE closed trades exist
+    for that theme (insufficient data to gate on).
+    """
+    try:
+        df = _load_trades_df(normalize=True)
+    except Exception as e:
+        logger.warning(f"Could not read trades for win-rate calc: {e}")
+        return None
+
+    if df.empty:
+        return None
+
+    closed = df[(df["status"] == "CLOSED") & (df["theme"] == theme)]
+    total = len(closed)
+    if total < ENERGY_GEO_MIN_TRADES_FOR_GATE:
+        return None
+
+    wins = 0
+    for val in closed["realized_pnl"]:
+        try:
+            if float(val) > 0:
+                wins += 1
+        except (TypeError, ValueError):
+            continue
+
+    return wins / float(total)
+
+
 def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
     """
     Pick the highest-edge signal that:
@@ -669,6 +705,36 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
         if outcome_sentiment == "neutral":
             logger.info("Skip %s [%s]: outcome sentiment neutral", symbol, side)
             continue
+
+        # ── energy_geopolitics theme gate ────────────────────────────────
+        if sig.get("theme") == "energy_geopolitics":
+            direction_logic = str(sig.get("direction_logic", "")).strip().lower()
+            if direction_logic == "case_by_case":
+                logger.info(
+                    "Skip %s [%s]: energy_geopolitics gate - case_by_case direction blocked",
+                    symbol,
+                    side,
+                )
+                continue
+
+            win_rate = compute_theme_win_rate("energy_geopolitics")
+            if win_rate is not None and win_rate > ENERGY_GEO_WINRATE_RELAX_TRIGGER:
+                eg_threshold = ENERGY_GEO_EDGE_THRESHOLD_RELAXED
+            else:
+                eg_threshold = ENERGY_GEO_EDGE_THRESHOLD_DEFAULT
+
+            edge = float(sig.get("edge_score", 0.0) or 0.0)
+            if edge < eg_threshold:
+                wr_str = f"{win_rate*100:.0f}%" if win_rate is not None else "n/a"
+                logger.info(
+                    "Skip %s [%s]: energy_geopolitics gate (edge=%.2f < threshold=%.2f, win_rate=%s)",
+                    symbol,
+                    side,
+                    edge,
+                    eg_threshold,
+                    wr_str,
+                )
+                continue
 
         bucket = bucket_map.get(symbol.upper())
         if bucket and bucket in open_buckets:
@@ -939,6 +1005,24 @@ def update_mark_prices():
             f"upnl=${upnl:+.2f}"
         )
 
+        # ── Breakeven + trailing stop adjustment ──────────────────────────
+        # Ratchet the stop up as the position moves into profit so winners
+        # keep more of their gains instead of leaking back to a TIME_EXIT.
+        new_sl = _compute_trailed_stop(side, entry, mark, tp, sl)
+        if new_sl is not None:
+            tp_dist = abs(tp - entry) if tp is not None else 0.0
+            progress = ((mark - entry) * side_mult / tp_dist) if tp_dist > 0 else 0.0
+            logger.info(
+                "Trail stop adjusted %s [%s]: SL %.2f -> %.2f (progress=%.0f%%)",
+                symbol,
+                trade_id,
+                sl if sl is not None else float("nan"),
+                new_sl,
+                progress * 100.0,
+            )
+            sl = new_sl
+            df.loc[idx, "stop_loss"] = new_sl
+
         # ── Close trigger checks ──────────────────────────────────────────
         close_reason = _check_close_triggers(
             side=side,
@@ -982,6 +1066,57 @@ def update_mark_prices():
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _compute_trailed_stop(
+    side: str,
+    entry: float,
+    mark: float,
+    tp: Optional[float],
+    current_sl: Optional[float],
+) -> Optional[float]:
+    """
+    Return an updated stop-loss if the position has moved far enough into
+    profit to ratchet the stop, else None (leave stop unchanged).
+
+    Progress is measured as the fraction of the take-profit distance covered:
+        progress = (mark - entry) * side_mult / tp_dist   (0 at entry, 1 at TP)
+
+    Rules (ratchet only — the stop never moves against the position):
+      - progress >= TRAIL_STOP_TRIGGER_PCT:
+            new_sl = mark - TRAIL_STOP_DISTANCE_PCT * tp_dist * side_mult
+      - progress >= TRAIL_BREAKEVEN_TRIGGER_PCT:
+            new_sl = entry (breakeven)
+    """
+    if tp is None or current_sl is None:
+        return None
+
+    side_mult = 1.0 if side == "BUY" else -1.0
+    tp_dist = abs(tp - entry)
+    if tp_dist <= 0:
+        return None
+
+    progress = (mark - entry) * side_mult / tp_dist
+
+    if progress >= TRAIL_STOP_TRIGGER_PCT:
+        trail_dist = tp_dist * TRAIL_STOP_DISTANCE_PCT
+        new_sl = mark - trail_dist * side_mult
+    elif progress >= TRAIL_BREAKEVEN_TRIGGER_PCT:
+        new_sl = entry
+    else:
+        return None
+
+    # Ratchet: only move the stop in the profitable direction, never widen it.
+    if side == "BUY":
+        new_sl = max(new_sl, current_sl)
+    else:  # SELL — stop sits above entry/mark, tighten downward toward mark
+        new_sl = min(new_sl, current_sl)
+
+    # No change if the ratchet didn't actually move the stop.
+    if abs(new_sl - current_sl) < 1e-9:
+        return None
+
+    return round(new_sl, 4)
+
 
 def _check_close_triggers(
     side: str, mark: float,
