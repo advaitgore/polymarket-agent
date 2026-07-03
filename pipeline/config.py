@@ -49,6 +49,7 @@ FACTOR_BUCKETS = {
   "defense":      ["LMT", "NOC", "RTX"],
   "crypto":       ["IBIT", "ETHA"],
   "tech_single":  ["NVDA", "MSFT", "AAPL", "GOOGL", "META", "AMZN", "TSLA"],
+  "rates":        ["TLT", "IEF", "GLD"],
 }
 
 # ── Simulated trade execution (no broker) ────────────────────────────────────
@@ -104,6 +105,10 @@ DEFAULT_SL_FRACTION    = 0.05
 # ATR-based stop parameters (daily closes).
 ATR_LOOKBACK_DAYS       = 14
 ATR_MULTIPLIER          = 1.5
+# Minimum stop distance as a fraction of entry price. The ATR-derived stop can
+# never be tighter than this floor (prevents inflated sizing / noise stops in
+# low-vol periods). Equals DEFAULT_SL_FRACTION (historical floor), now explicit.
+ATR_MIN_STOP_FRACTION   = DEFAULT_SL_FRACTION
 
 # Minimum hold time in market hours before allowing normal SL checks.
 MIN_HOLD_MARKET_HOURS   = 4
@@ -142,6 +147,21 @@ ENERGY_GEO_EDGE_THRESHOLD_DEFAULT = 4.5
 ENERGY_GEO_EDGE_THRESHOLD_RELAXED = 3.5
 ENERGY_GEO_WINRATE_RELAX_TRIGGER  = 0.40
 ENERGY_GEO_MIN_TRADES_FOR_GATE    = 2
+
+# global_macro theme gate. TLT proxy has the same 25% win rate as energy_geo.
+# Lower thresholds than energy_geo (TLT-macro correlation is tighter than
+# XLE-geopolitics). Auto-relaxes once rolling win rate exceeds the trigger.
+GLOBAL_MACRO_EDGE_THRESHOLD_DEFAULT = 3.5
+GLOBAL_MACRO_EDGE_THRESHOLD_RELAXED = 2.5
+GLOBAL_MACRO_WINRATE_RELAX_TRIGGER  = 0.45
+GLOBAL_MACRO_MIN_TRADES_FOR_GATE    = 2
+
+# Event-expiry (resolution) exit. Before SL/TP/TIME_EXIT, close a position if
+# the Polymarket market that triggered it has effectively resolved (highest
+# outcome probability >= HIGH or <= LOW): the equity has already repriced.
+RESOLUTION_EXIT_ENABLED   = True
+RESOLUTION_EXIT_PROB_HIGH = 0.85
+RESOLUTION_EXIT_PROB_LOW  = 0.15
 
 # ── Edge score instrument-quality adjustment ────────────────────────────────
 # The edge score is multiplied by an instrument_quality factor that blends a

@@ -71,6 +71,10 @@ from config import (
     ENERGY_GEO_EDGE_THRESHOLD_DEFAULT, ENERGY_GEO_EDGE_THRESHOLD_RELAXED,
     ENERGY_GEO_WINRATE_RELAX_TRIGGER, ENERGY_GEO_MIN_TRADES_FOR_GATE,
     TRAIL_BREAKEVEN_TRIGGER_PCT, TRAIL_STOP_TRIGGER_PCT, TRAIL_STOP_DISTANCE_PCT,
+    GLOBAL_MACRO_EDGE_THRESHOLD_DEFAULT, GLOBAL_MACRO_EDGE_THRESHOLD_RELAXED,
+    GLOBAL_MACRO_WINRATE_RELAX_TRIGGER, GLOBAL_MACRO_MIN_TRADES_FOR_GATE,
+    RESOLUTION_EXIT_ENABLED, RESOLUTION_EXIT_PROB_HIGH, RESOLUTION_EXIT_PROB_LOW,
+    ATR_MIN_STOP_FRACTION,
 )
 
 logger = logging.getLogger(__name__)
@@ -380,7 +384,14 @@ def compute_atr_stop_distance(symbol: str, entry_price: float) -> float:
         return fallback
 
     atr = sum(diffs[:ATR_LOOKBACK_DAYS]) / float(ATR_LOOKBACK_DAYS)
-    sl_dist = max(atr * ATR_MULTIPLIER, fallback)
+    atr_dist = atr * ATR_MULTIPLIER
+    floor_dist = entry_price * ATR_MIN_STOP_FRACTION
+    sl_dist = max(atr_dist, floor_dist)
+    if atr_dist < floor_dist:
+        logger.info(
+            "ATR floor applied %s: atr_dist=%.2f < floor=%.2f (%.1f%% of entry)",
+            symbol, atr_dist, floor_dist, ATR_MIN_STOP_FRACTION * 100.0,
+        )
     logger.info(
         "ATR stop %s: atr=%.2f mult=%.2f sl_dist=%.2f",
         symbol,
@@ -736,6 +747,23 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
                 )
                 continue
 
+        # global_macro theme gate (mirrors energy_geopolitics gate)
+        if sig.get("theme") == "global_macro":
+            gm_win_rate = compute_theme_win_rate("global_macro")
+            if gm_win_rate is not None and gm_win_rate > GLOBAL_MACRO_WINRATE_RELAX_TRIGGER:
+                gm_threshold = GLOBAL_MACRO_EDGE_THRESHOLD_RELAXED
+            else:
+                gm_threshold = GLOBAL_MACRO_EDGE_THRESHOLD_DEFAULT
+
+            gm_edge = float(sig.get("edge_score", 0.0) or 0.0)
+            if gm_edge < gm_threshold:
+                gm_wr = ("%.0f%%" % (gm_win_rate * 100)) if gm_win_rate is not None else "n/a"
+                logger.info(
+                    "Skip %s [%s]: global_macro gate (edge=%.2f < threshold=%.2f, win_rate=%s)",
+                    symbol, side, gm_edge, gm_threshold, gm_wr,
+                )
+                continue
+
         bucket = bucket_map.get(symbol.upper())
         if bucket and bucket in open_buckets:
             logger.info("Skip %s [%s]: factor bucket '%s' already occupied", symbol, side, bucket)
@@ -950,6 +978,45 @@ def _append_trade_row(trade: Dict):
 # Cycle: mark + auto-close open positions
 # ─────────────────────────────────────────────────────────────────────────────
 
+def get_market_resolution_probability(conn, market_id: str):
+    # Highest current outcome probability for a market_id, or None on any miss.
+    if not market_id or str(market_id).strip() == "":
+        return None
+    try:
+        row = conn.execute(
+            "SELECT MAX(current_price) FROM outcomes WHERE market_id=?",
+            (market_id,),
+        ).fetchone()
+    except Exception as e:
+        logger.warning("Resolution check DB error for market_id=%s: %s", str(market_id)[:16], e)
+        return None
+    if not row or row[0] is None:
+        return None
+    try:
+        return float(row[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def check_resolution_exit(conn, market_id: str, trade_id: str = "") -> bool:
+    # True if the triggering Polymarket market has effectively resolved.
+    # Fails open (returns False) with a warning when probability is unavailable.
+    prob = get_market_resolution_probability(conn, market_id)
+    if prob is None:
+        logger.warning(
+            "Resolution check skipped [%s]: no probability for market_id=%s (fail open)",
+            trade_id, str(market_id)[:16],
+        )
+        return False
+    if prob >= RESOLUTION_EXIT_PROB_HIGH or prob <= RESOLUTION_EXIT_PROB_LOW:
+        logger.info(
+            "Resolution check [%s] market=%s: prob=%.2f -> RESOLUTION_EXIT",
+            trade_id, str(market_id)[:16], prob,
+        )
+        return True
+    return False
+
+
 def update_mark_prices():
     """
     For every OPEN position:
@@ -977,6 +1044,15 @@ def update_mark_prices():
 
     # Invalidate cache so we get fresh prices this cycle
     invalidate_price_cache()
+
+    # Single DB connection for resolution-exit checks this cycle (read-only).
+    res_conn = None
+    if RESOLUTION_EXIT_ENABLED:
+        try:
+            res_conn = sqlite3.connect(DB_PATH)
+        except Exception as e:
+            logger.warning("Resolution exit disabled this cycle: could not open DB: %s", e)
+            res_conn = None
 
     updated = 0
 
@@ -1023,17 +1099,23 @@ def update_mark_prices():
             sl = new_sl
             df.loc[idx, "stop_loss"] = new_sl
 
-        # ── Close trigger checks ──────────────────────────────────────────
-        close_reason = _check_close_triggers(
-            side=side,
-            mark=mark,
-            sl=sl,
-            tp=tp,
-            open_date=open_date,
-            entry=entry,
-            now_utc=datetime.now(timezone.utc),
-            min_hold_hours=MIN_HOLD_MARKET_HOURS,
-        )
+        # ── Event-expiry (resolution) exit — highest priority ─────────────
+        close_reason = None
+        if res_conn is not None and check_resolution_exit(res_conn, market_id, trade_id):
+            close_reason = "RESOLUTION_EXIT"
+
+        # ── Close trigger checks (SL / TP / TIME_EXIT) ────────────────────
+        if close_reason is None:
+            close_reason = _check_close_triggers(
+                side=side,
+                mark=mark,
+                sl=sl,
+                tp=tp,
+                open_date=open_date,
+                entry=entry,
+                now_utc=datetime.now(timezone.utc),
+                min_hold_hours=MIN_HOLD_MARKET_HOURS,
+            )
 
         if close_reason:
             realized = upnl
@@ -1051,6 +1133,12 @@ def update_mark_prices():
                 f"entry=${entry:.2f} exit=${mark:.2f} "
                 f"realized_pnl=${realized:+.4f} | trade_id={trade_id}"
             )
+
+    if res_conn is not None:
+        try:
+            res_conn.close()
+        except Exception:
+            pass
 
     try:
         df.to_csv(TRADES_CSV, index=False)
