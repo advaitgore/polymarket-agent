@@ -71,7 +71,7 @@
         "fossil fuel"
       ],
       "direction_logic": "higher_prob_supply_shock_or_escalation_means_long",
-      "correlation_quality": 0.55,
+      "correlation_quality": 0.50,
       "notes": "XLE is primary. Use XOP for E&P-heavy bets, USO for pure WTI proxy, XOM/CVX when question is company-specific. Only flag trade_eligible=true when there is a clear oil/gas price causation."
     },
     {
@@ -82,7 +82,9 @@
         "LMT",
         "NOC",
         "RTX",
-        "ITA"
+        "ITA",
+        "GD",
+        "PLTR"
       ],
       "primary_ticker": "LMT",
       "trade_eligible_default": true,
@@ -99,6 +101,8 @@
         "lockheed",
         "northrop",
         "raytheon",
+        "general dynamics",
+        "palantir",
         "defense contractor",
         "taiwan invasion",
         "taiwan strait",
@@ -129,7 +133,7 @@
         "defense authorization"
       ],
       "direction_logic": "higher_prob_escalation_means_long",
-      "correlation_quality": 0.90,
+      "correlation_quality": 0.92,
       "notes": "LMT is primary \u2014 single largest defense contractor. ITA for broad aerospace/defense ETF exposure. Only map if the conflict has clear defense-spending implications at scale."
     },
     {
@@ -221,7 +225,7 @@
         "national debt"
       ],
       "direction_logic": "case_by_case",
-      "correlation_quality": 1.00,
+      "correlation_quality": 0.70,
       "non_tradable_signals": [
         "celebrity nominations",
         "joke candidates",
@@ -326,7 +330,7 @@
         "macro data"
       ],
       "direction_logic": "higher_prob_rate_cut_or_soft_landing_means_long_tlt",
-      "correlation_quality": 0.80,
+      "correlation_quality": 0.55,
       "notes": "TLT is primary for rate/duration plays. SPY/QQQ for broad equity macro. XLF when banking/rates are the driver. GLD for safe-haven macro shocks."
     },
     {
@@ -468,7 +472,7 @@
         "crypto exchange"
       ],
       "direction_logic": "higher_prob_positive_crypto_outcome_means_long",
-      "correlation_quality": 0.85,
+      "correlation_quality": 0.87,
       "notes": "IBIT (BlackRock Bitcoin ETF) is primary for Bitcoin questions. ETHA for Ethereum. MSTR as a high-beta Bitcoin proxy. Obscure altcoins, NFTs, and meme coins are NOT trade_eligible."
     }
   ],

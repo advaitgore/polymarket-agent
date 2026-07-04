@@ -149,6 +149,8 @@ COMPANY_OVERRIDES = {
     "lockheed": "LMT", "lmt": "LMT",
     "northrop": "NOC", "noc": "NOC",
     "raytheon": "RTX", "rtx": "RTX",
+    "general dynamics": "GD", "gd ": "GD",
+    "palantir": "PLTR", "pltr": "PLTR",
     "exxon": "XOM", "xom": "XOM",
     "chevron": "CVX", "cvx": "CVX",
     "bitcoin": "IBIT", "btc ": "IBIT",

@@ -75,6 +75,7 @@ from config import (
     GLOBAL_MACRO_WINRATE_RELAX_TRIGGER, GLOBAL_MACRO_MIN_TRADES_FOR_GATE,
     RESOLUTION_EXIT_ENABLED, RESOLUTION_EXIT_PROB_HIGH, RESOLUTION_EXIT_PROB_LOW,
     ATR_MIN_STOP_FRACTION,
+    THEME_MAX_HOLD_TRADING_DAYS, DEFAULT_MAX_HOLD_TRADING_DAYS,
 )
 
 logger = logging.getLogger(__name__)
@@ -333,6 +334,8 @@ def estimate_stock_volatility(symbol: str) -> float:
         "NOC":   0.025,
         "RTX":   0.025,
         "ITA":   0.03,
+        "GD":    0.025,
+        "PLTR":  0.07,
     }
     return VOL_OVERRIDES.get(symbol, DEFAULT_SL_FRACTION)
 
@@ -1106,6 +1109,7 @@ def update_mark_prices():
 
         # ── Close trigger checks (SL / TP / TIME_EXIT) ────────────────────
         if close_reason is None:
+            theme = str(row.get("theme", ""))
             close_reason = _check_close_triggers(
                 side=side,
                 mark=mark,
@@ -1115,6 +1119,7 @@ def update_mark_prices():
                 entry=entry,
                 now_utc=datetime.now(timezone.utc),
                 min_hold_hours=MIN_HOLD_MARKET_HOURS,
+                max_hold_days=_max_hold_days_for_theme(theme),
             )
 
         if close_reason:
@@ -1206,6 +1211,13 @@ def _compute_trailed_stop(
     return round(new_sl, 4)
 
 
+def _max_hold_days_for_theme(theme: str) -> int:
+    # Per-theme maximum hold in trading days; falls back to the default.
+    if not theme:
+        return DEFAULT_MAX_HOLD_TRADING_DAYS
+    return int(THEME_MAX_HOLD_TRADING_DAYS.get(str(theme).strip(), DEFAULT_MAX_HOLD_TRADING_DAYS))
+
+
 def _check_close_triggers(
     side: str, mark: float,
     sl: Optional[float], tp: Optional[float],
@@ -1213,6 +1225,7 @@ def _check_close_triggers(
     entry: float,
     now_utc: datetime,
     min_hold_hours: float,
+    max_hold_days: int = MAX_HOLD_TRADING_DAYS,
 ) -> Optional[str]:
     """
     Return the close reason string if any trigger fires, else None.
@@ -1223,7 +1236,7 @@ def _check_close_triggers(
       TIME_EXIT if trading_days > MAX_HOLD_TRADING_DAYS
     """
     days_open = trading_days_since(open_date)
-    if days_open >= MAX_HOLD_TRADING_DAYS:
+    if days_open >= max_hold_days:
         return "TIME_EXIT"
 
     hours_open = 0.0

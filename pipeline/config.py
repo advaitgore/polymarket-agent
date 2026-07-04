@@ -46,8 +46,8 @@ SYMBOL_REENTRY_COOLDOWN_HOURS = 24.0
 FACTOR_BUCKETS = {
   "equity_index": ["SPY", "QQQ", "IWM"],
   "energy":       ["XLE", "XOM", "CVX", "USO"],
-  "defense":      ["LMT", "NOC", "RTX"],
-  "crypto":       ["IBIT", "ETHA"],
+  "defense":      ["LMT", "NOC", "RTX", "ITA", "GD", "PLTR"],
+  "crypto":       ["IBIT", "ETHA", "MSTR"],
   "tech_single":  ["NVDA", "MSFT", "AAPL", "GOOGL", "META", "AMZN", "TSLA"],
   "rates":        ["TLT", "IEF", "GLD"],
 }
@@ -84,7 +84,20 @@ MAX_OPEN_POSITIONS      = 10
 MAX_EXPOSURE_PCT        = 0.30  # kept for legacy reference, not used for gating
 
 # Maximum number of trading days a position may stay open before forced close.
-MAX_HOLD_TRADING_DAYS   = 10
+# DEFAULT_MAX_HOLD_TRADING_DAYS is the fallback; per-theme overrides live in
+# THEME_MAX_HOLD_TRADING_DAYS. Hold horizon is theme-dependent: crypto/Bitcoin
+# markets resolve fast (thesis stales in days), defense geopolitical repricing
+# is institutionally slow (needs more room), macro/rates move in days.
+MAX_HOLD_TRADING_DAYS   = 10          # legacy alias / global fallback
+DEFAULT_MAX_HOLD_TRADING_DAYS = 10
+THEME_MAX_HOLD_TRADING_DAYS = {
+    "crypto_major":        5,
+    "tech_ai":             6,
+    "defense_geopolitics": 12,
+    "us_politics_macro":   8,
+    "global_macro":        7,
+    "energy_geopolitics":  7,
+}
 
 # ── Breakeven + trailing stop ────────────────────────────────────────────────
 # Once an open position moves into profit past TRAIL_BREAKEVEN_TRIGGER_PCT of
@@ -171,7 +184,7 @@ RESOLUTION_EXIT_PROB_LOW  = 0.15
 #   history_factor     = max(0.1, rolling_win_rate)   (1.0 if insufficient data)
 #   instrument_quality = BASE_WEIGHT*correlation_quality + HISTORY_WEIGHT*history_factor
 # Signals whose adjusted edge falls below MIN_EDGE_SCORE are not trade-eligible.
-MIN_EDGE_SCORE                    = 2.0
+MIN_EDGE_SCORE                    = 1.0
 INSTRUMENT_QUALITY_HISTORY_WEIGHT = 0.6
 INSTRUMENT_QUALITY_BASE_WEIGHT    = 0.4
 
