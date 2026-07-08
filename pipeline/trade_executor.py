@@ -794,6 +794,15 @@ def select_best_signal(signals: List[Dict]) -> Optional[Dict]:
                 )
                 continue
 
+        # Entry-side resolution guard: do not open a trade on a market whose
+        # Polymarket thesis has already resolved (the equity has repriced).
+        if _entry_market_resolved(market_id):
+            logger.info(
+                "Skip %s [%s]: market already resolved (market_id=%s)",
+                symbol, side, market_id[:16] if market_id else "",
+            )
+            continue
+
         if vol_gate_active and symbol != "NONE":
             vol_ratio = vol_ratio_cache.get(symbol)
             if vol_ratio is None:
@@ -1018,6 +1027,30 @@ def check_resolution_exit(conn, market_id: str, trade_id: str = "") -> bool:
         )
         return True
     return False
+
+
+def _entry_market_resolved(market_id: str) -> bool:
+    # Entry-side resolution guard: True if the triggering Polymarket market has
+    # already effectively resolved (max outcome prob >= HIGH or <= LOW), so a new
+    # trade would open on a dead thesis. Mirrors the exit-side check; opens its
+    # own short-lived connection and fails open (returns False) on any DB miss.
+    if not RESOLUTION_EXIT_ENABLED or not market_id:
+        return False
+    try:
+        conn = sqlite3.connect(DB_PATH)
+    except Exception as e:
+        logger.warning("Entry resolution guard: DB open failed (%s) - failing open", e)
+        return False
+    try:
+        prob = get_market_resolution_probability(conn, market_id)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    if prob is None:
+        return False
+    return prob >= RESOLUTION_EXIT_PROB_HIGH or prob <= RESOLUTION_EXIT_PROB_LOW
 
 
 def update_mark_prices():
