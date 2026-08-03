@@ -287,8 +287,11 @@ NEGATIVE_OUTCOME_LABELS = {
 DIRECTION_HINTS = {
     "higher_prob_supply_shock_or_escalation_means_long": {
         "bullish": [
-            r"supply shock", r"disruption", r"strait of hormuz", r"escalat", r"attack", r"strike",
-            r"conflict", r"war", r"sanction", r"blockade",
+            # NOTE: "strait of hormuz" deliberately NOT listed - it is a location name, not a
+            # directional signal, and it collided with "normal" in "Strait of Hormuz traffic
+            # returns to normal?" causing a permanent 1-1 tie -> neutral.
+            r"supply shock", r"disruption", r"escalat", r"attack", r"strike",
+            r"conflict", r"war", r"sanction", r"blockade", r"closure", r"closed",
         ],
         "bearish": [
             r"ceasefire", r"peace", r"de-escalat", r"truce", r"normal", r"resume", r"open shipping",
@@ -313,6 +316,9 @@ DIRECTION_HINTS = {
         "bearish": [
             r"rate hike", r"hike rates", r"hawkish", r"higher yields", r"inflation spike",
             r"sticky inflation", r"no rate cut",
+            # Synonym coverage: real Polymarket questions phrase hikes as "increase interest
+            # rates" / "raise rates" rather than the literal "rate hike".
+            r"increase interest rates", r"raise rates", r"rate increase", r"increase rates",
         ],
     },
     "higher_prob_permissive_regulation_or_positive_earnings_means_long": {
@@ -329,9 +335,13 @@ DIRECTION_HINTS = {
         "bullish": [
             r"approve", r"approval", r"adoption", r"institutional", r"inflows", r"all-time high",
             r"bull market",
+            # Price-level framings: most Polymarket crypto markets are threshold questions.
+            r"reach \$", r"hit \$", r"above \$", r"exceed", r"surge", r"rally", r"new high",
         ],
         "bearish": [
             r"ban", r"crackdown", r"exploit", r"hack", r"lawsuit", r"rejection", r"delist",
+            # Price-level framings (downside).
+            r"dip to", r"drop to", r"fall to", r"fall below", r"below \$", r"crash", r"plunge",
         ],
     },
 }
@@ -339,6 +349,9 @@ DIRECTION_HINTS = {
 CASE_BY_CASE_BULLISH_HINTS = [
     r"ceasefire", r"peace", r"de-escalat", r"truce", r"deal", r"end of military operations",
     r"budget deal", r"avoid shutdown", r"stimulus", r"tax cut", r"deregulat",
+    # Regulatory-clarity legislation: passage reduces uncertainty (market-positive), same
+    # spirit as "deregulat" above.
+    r"clarity act", r"market structure bill", r"regulatory framework",
 ]
 
 CASE_BY_CASE_BEARISH_HINTS = [
