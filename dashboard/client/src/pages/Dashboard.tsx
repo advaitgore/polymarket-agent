@@ -5,6 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ReferenceLine
 } from "recharts";
 import { format, parseISO } from "date-fns";
+import { Activity, Zap, Briefcase, TrendingUp } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Stats = {
@@ -41,10 +42,10 @@ type PricePoint = { price: number; timestamp: string };
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: "markets", label: "Live Markets", icon: "◉" },
-  { id: "signals", label: "Signals", icon: "⚡" },
-  { id: "trades", label: "Trades", icon: "💼" },
-  { id: "performance", label: "Performance", icon: "📈" },
+  { id: "markets", label: "Live Markets", Icon: Activity },
+  { id: "signals", label: "Signals", Icon: Zap },
+  { id: "trades", label: "Trades", Icon: Briefcase },
+  { id: "performance", label: "Performance", Icon: TrendingUp },
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
@@ -59,12 +60,43 @@ function fmtTime(ts: string) {
 function clsChange(n: number) { return n > 0 ? "text-green-400" : n < 0 ? "text-red-400" : "text-slate-400"; }
 function clsPnl(n: number) { return n > 0 ? "text-green-400 tabular" : n < 0 ? "text-red-400 tabular" : "text-slate-400 tabular"; }
 
+// ── Shared style constants (tables + charts) ─────────────────────────────────
+const TABLE_HEAD_ROW = "text-xs text-muted-foreground uppercase tracking-wide border-b border-border";
+const TABLE_HEAD_CELL = "px-3 py-2.5 font-medium";
+const TABLE_HEAD_CELL_L = `${TABLE_HEAD_CELL} text-left`;
+const TABLE_HEAD_CELL_R = `${TABLE_HEAD_CELL} text-right`;
+const TABLE_HEAD_CELL_C = `${TABLE_HEAD_CELL} text-center`;
+const TABLE_ROW = "border-b border-border/40 transition-colors hover:bg-muted/20";
+const TABLE_CELL = "px-3 py-2.5";
+const TABLE_CELL_R = `${TABLE_CELL} text-right tabular`;
+const TABLE_CELL_C = `${TABLE_CELL} text-center`;
+
+// Recharts tooltip: shared across all chart panels, sourced from CSS vars.
+const chartTooltipStyle = {
+  background: "hsl(222 18% 13%)",
+  border: "1px solid hsl(222 15% 22%)",
+  borderRadius: 8,
+  color: "#e2e8f0",
+  fontSize: 12,
+  boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+};
+const chartGridStroke = "hsl(222 15% 18%)";
+const chartAxisTick = { fill: "#64748b", fontSize: 10 };
+const CHART_COLOR = {
+  cyan: "#00d4ff",
+  green: "#22c55e",
+  amber: "#f59e0b",
+};
+
 // ── StatCard ──────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: string }) {
+function StatCard({ label, value, sub, accent, size = "sm" }: { label: string; value: string | number; sub?: string; accent?: string; size?: "sm" | "lg" }) {
+  const isLg = size === "lg";
   return (
-    <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
-      <span className={`text-xl font-bold tabular ${accent || "text-foreground"}`}>{value}</span>
+    <div className={`rounded-lg border bg-card flex flex-col gap-1 transition-colors ${
+      isLg ? "border-border/80 p-5 shadow-lg shadow-black/20" : "border-border p-4"
+    }`}>
+      <span className={`text-muted-foreground uppercase tracking-wide ${isLg ? "text-xs font-medium" : "text-xs"}`}>{label}</span>
+      <span className={`font-bold tabular ${isLg ? "text-3xl" : "text-xl"} ${accent || "text-foreground"}`}>{value}</span>
       {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
     </div>
   );
@@ -192,35 +224,36 @@ export default function Dashboard() {
           <span className="ml-2 hidden sm:block"><LiveDot /></span>
         </div>
 
-        {/* Stats strip */}
-        <div className="hidden md:flex items-center gap-5 text-xs">
-          <span className="text-muted-foreground">
-            Markets: <span className="text-foreground font-semibold tabular">{stats?.total_markets ?? "—"}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Signals 24h: <span className="text-amber-400 font-semibold tabular">{stats?.signals_24h ?? "—"}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Edges: <span className="text-amber-400 font-semibold tabular">{stats?.unexplained_edges ?? "—"}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Open: <span className="text-foreground font-semibold tabular">{stats?.open_trades ?? "—"}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Unreal: <span className={clsPnl(stats?.total_pnl || 0)}>{stats ? fmt$(stats.total_pnl) : "—"}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Realized: <span className={clsPnl(stats?.realized_pnl || 0)}>{stats ? fmt$(stats.realized_pnl ?? 0) : "—"}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Equity: <span className="text-cyan-400 font-bold tabular">{stats ? fmt$(stats.account_equity ?? 1000) : "—"}</span>
-          </span>
-        </div>
-
         <div className="text-xs text-muted-foreground tabular">
           {clockET} ET
         </div>
       </header>
+
+      {/* ── Secondary metrics bar ───────────────────────────────────────── */}
+      <div className="hidden md:flex items-center gap-6 px-5 py-2 border-b border-border bg-card/20 shrink-0 text-xs overflow-x-auto">
+        <span className="flex items-baseline gap-1.5 text-muted-foreground">
+          Markets<span className="text-foreground font-semibold tabular">{stats?.total_markets ?? "—"}</span>
+        </span>
+        <span className="flex items-baseline gap-1.5 text-muted-foreground">
+          Signals 24h<span className="text-amber-400 font-semibold tabular">{stats?.signals_24h ?? "—"}</span>
+        </span>
+        <span className="flex items-baseline gap-1.5 text-muted-foreground">
+          Edges<span className="text-amber-400 font-semibold tabular">{stats?.unexplained_edges ?? "—"}</span>
+        </span>
+        <span className="flex items-baseline gap-1.5 text-muted-foreground">
+          Open<span className="text-foreground font-semibold tabular">{stats?.open_trades ?? "—"}</span>
+        </span>
+        <span className="w-px h-3.5 bg-border" />
+        <span className="flex items-baseline gap-1.5 text-muted-foreground">
+          Unrealized<span className={`font-semibold ${clsPnl(stats?.total_pnl || 0)}`}>{stats ? fmt$(stats.total_pnl) : "—"}</span>
+        </span>
+        <span className="flex items-baseline gap-1.5 text-muted-foreground">
+          Realized<span className={`font-semibold ${clsPnl(stats?.realized_pnl || 0)}`}>{stats ? fmt$(stats.realized_pnl ?? 0) : "—"}</span>
+        </span>
+        <span className="flex items-baseline gap-1.5 text-muted-foreground ml-auto">
+          Equity<span className="text-cyan-400 font-bold tabular text-sm">{stats ? fmt$(stats.account_equity ?? 1000) : "—"}</span>
+        </span>
+      </div>
 
       {/* ── Tab bar ─────────────────────────────────────────────────────── */}
       <nav className="flex items-center gap-0.5 px-4 border-b border-border bg-card/30 shrink-0">
@@ -229,20 +262,20 @@ export default function Dashboard() {
             key={t.id}
             data-testid={`tab-${t.id}`}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px rounded-t-md
               ${tab === t.id
-                ? "border-cyan-400 text-cyan-400"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"}`}
+                ? "border-cyan-400 text-cyan-400 bg-cyan-400/[0.06]"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/20"}`}
           >
-            <span className="text-base leading-none">{t.icon}</span>
+            <t.Icon size={15} strokeWidth={2} className="shrink-0" />
             <span>{t.label}</span>
             {t.id === "signals" && stats?.unexplained_edges ? (
-              <span className="badge-edge text-xs px-1.5 py-0.5 rounded-full font-bold ml-1">
+              <span className="badge-edge text-xs px-1.5 py-0.5 rounded-full font-bold ml-0.5 min-w-[1.25rem] text-center">
                 {stats.unexplained_edges}
               </span>
             ) : null}
             {t.id === "trades" && openTrades.length > 0 ? (
-              <span className="bg-green-500/20 text-green-400 text-xs px-1.5 py-0.5 rounded-full font-bold ml-1">
+              <span className="bg-green-500/20 text-green-400 text-xs px-1.5 py-0.5 rounded-full font-bold ml-0.5 min-w-[1.25rem] text-center">
                 {openTrades.length}
               </span>
             ) : null}
@@ -389,7 +422,7 @@ export default function Dashboard() {
                       <XAxis dataKey="timestamp" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => v?.slice(11, 16)} />
                       <YAxis tick={{ fill: "#64748b", fontSize: 10 }} domain={["auto", "auto"]} tickFormatter={v => `${v.toFixed(0)}%`} />
                       <Tooltip
-                        contentStyle={{ background: "hsl(222 18% 13%)", border: "1px solid hsl(222 15% 22%)", borderRadius: 6, color: "#e2e8f0" }}
+                        contentStyle={chartTooltipStyle}
                         formatter={(v: any) => [`${Number(v).toFixed(1)}%`, "Probability"]}
                         labelFormatter={l => l?.slice(5, 16) || l}
                       />
@@ -553,8 +586,8 @@ export default function Dashboard() {
               const equity       = 1000 + realizedSum;
               return (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <StatCard label="Account Equity" value={fmt$(equity)} accent={equity >= 1000 ? "text-cyan-400" : "text-red-400"} sub="Base $1,000" />
-                  <StatCard label="Realized P&L" value={fmt$(realizedSum)} accent={realizedSum >= 0 ? "text-green-400" : "text-red-400"} sub={`${closedTrades.length} closed`} />
+                  <StatCard size="lg" label="Account Equity" value={fmt$(equity)} accent={equity >= 1000 ? "text-cyan-400" : "text-red-400"} sub="Base $1,000" />
+                  <StatCard size="lg" label="Realized P&L" value={fmt$(realizedSum)} accent={realizedSum >= 0 ? "text-green-400" : "text-red-400"} sub={`${closedTrades.length} closed`} />
                   <StatCard label="Unrealized P&L" value={fmt$(unrealSum)} accent={unrealSum >= 0 ? "text-green-400" : "text-red-400"} sub={`${openTrades.length} open`} />
                   <StatCard label="Avg Edge at Entry" value={trades.length ? (trades.reduce((s, t) => s + t.edge_score, 0) / trades.length).toFixed(2) : "—"} accent="text-amber-400" />
                 </div>
@@ -736,7 +769,7 @@ export default function Dashboard() {
               const worst        = realizedPnls.length ? Math.min(...realizedPnls) : null;
               return (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <StatCard label="Realized P&L" value={fmt$(realizedSum)} accent={realizedSum >= 0 ? "text-green-400" : "text-red-400"} sub={`${closedTrades.length} closed trades`} />
+                  <StatCard size="lg" label="Realized P&L" value={fmt$(realizedSum)} accent={realizedSum >= 0 ? "text-green-400" : "text-red-400"} sub={`${closedTrades.length} closed trades`} />
                   <StatCard label="Win Rate" value={winRate} sub={`${winners}/${closedTrades.length} wins`} />
                   <StatCard label="Best Trade" value={best !== null ? fmt$(best) : "—"} accent="text-green-400" />
                   <StatCard label="Worst Trade" value={worst !== null ? fmt$(worst) : "—"} accent="text-red-400" />
@@ -767,7 +800,7 @@ export default function Dashboard() {
                               <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 15% 18%)" />
                               <XAxis dataKey="hour" tick={{ fill: "#64748b", fontSize: 9 }} />
                               <YAxis tick={{ fill: "#64748b", fontSize: 9 }} />
-                              <Tooltip contentStyle={{ background: "hsl(222 18% 13%)", border: "1px solid hsl(222 15% 22%)", borderRadius: 6, color: "#e2e8f0" }} />
+                              <Tooltip contentStyle={chartTooltipStyle} />
                               <Bar dataKey="count" fill="#f59e0b" radius={[2,2,0,0]} />
                             </BarChart>
                           </ResponsiveContainer>
@@ -788,7 +821,7 @@ export default function Dashboard() {
                       <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} />
                       <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => `$${v}`} />
                       <ReferenceLine y={0} stroke="hsl(222 15% 30%)" strokeDasharray="4 4" />
-                      <Tooltip contentStyle={{ background: "hsl(222 18% 13%)", border: "1px solid hsl(222 15% 22%)", borderRadius: 6, color: "#e2e8f0" }} formatter={(v:any)=>[`$${Number(v).toFixed(2)}`, "Cum. P&L"]} />
+                      <Tooltip contentStyle={chartTooltipStyle} formatter={(v:any)=>[`$${Number(v).toFixed(2)}`, "Cum. P&L"]} />
                       <Area type="monotone" dataKey="cumPnl" stroke="#22c55e" strokeWidth={2} fill="url(#pnlGrad)" dot={false} />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -810,7 +843,7 @@ export default function Dashboard() {
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 15% 18%)" horizontal={false} />
                             <XAxis type="number" tick={{ fill: "#64748b", fontSize: 9 }} />
                             <YAxis type="category" dataKey="correlated_instrument" tick={{ fill: "#94a3b8", fontSize: 9 }} width={35} />
-                            <Tooltip contentStyle={{ background: "hsl(222 18% 13%)", border: "1px solid hsl(222 15% 22%)", borderRadius: 6, color: "#e2e8f0" }} />
+                            <Tooltip contentStyle={chartTooltipStyle} />
                             <Bar dataKey="edge_score" fill="#f59e0b" radius={[0,2,2,0]} />
                           </BarChart>
                         </ResponsiveContainer>
@@ -826,7 +859,7 @@ export default function Dashboard() {
                       <ReferenceLine y={0} stroke="hsl(222 15% 30%)" strokeDasharray="4 4" />
                       <Tooltip
                         cursor={{ strokeDasharray: "3 3", stroke: "#475569" }}
-                        contentStyle={{ background: "hsl(222 18% 13%)", border: "1px solid hsl(222 15% 22%)", borderRadius: 6, color: "#e2e8f0" }}
+                        contentStyle={chartTooltipStyle}
                         formatter={(v:any, name:string) => [name === "pnl" ? `$${Number(v).toFixed(2)}` : v, name === "pnl" ? "P&L" : "Edge Score"]}
                       />
                       <Scatter data={scatterData} fill="#00d4ff" opacity={0.8} />
