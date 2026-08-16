@@ -80,12 +80,12 @@ const chartTooltipStyle = {
   fontSize: 12,
   boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
 };
-const chartGridStroke = "hsl(222 15% 18%)";
-const chartAxisTick = { fill: "#64748b", fontSize: 10 };
+const chartGridStroke = "hsl(0 0% 20%)";
+const chartAxisTick = { fill: "#737373", fontSize: 10 };
 const CHART_COLOR = {
-  cyan: "#00d4ff",
-  green: "#22c55e",
-  amber: "#f59e0b",
+  cyan: "#e5e5e5",
+  green: "#34d399",
+  amber: "#d4d4d4",
 };
 
 // ── StatCard ──────────────────────────────────────────────────────────────────
@@ -116,9 +116,9 @@ function LiveDot() {
 function Logo() {
   return (
     <svg aria-label="Polymarket Trader" width="28" height="28" viewBox="0 0 28 28" fill="none">
-      <rect width="28" height="28" rx="6" fill="hsl(195 100% 50% / 0.15)" stroke="hsl(195 100% 50% / 0.4)" strokeWidth="1"/>
-      <path d="M6 20 L10 12 L14 16 L18 9 L22 14" stroke="hsl(195 100% 50%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="22" cy="14" r="2" fill="hsl(195 100% 50%)"/>
+      <rect width="28" height="28" rx="6" fill="hsl(0 0% 100% / 0.10)" stroke="hsl(0 0% 100% / 0.25)" strokeWidth="1"/>
+      <path d="M6 20 L10 12 L14 16 L18 9 L22 14" stroke="hsl(0 0% 92%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="22" cy="14" r="2" fill="hsl(0 0% 92%)"/>
     </svg>
   );
 }
@@ -235,10 +235,10 @@ export default function Dashboard() {
           Markets<span className="text-foreground font-semibold tabular">{stats?.total_markets ?? "—"}</span>
         </span>
         <span className="flex items-baseline gap-1.5 text-muted-foreground">
-          Signals 24h<span className="text-amber-400 font-semibold tabular">{stats?.signals_24h ?? "—"}</span>
+          Signals 24h<span className="text-foreground font-semibold tabular">{stats?.signals_24h ?? "—"}</span>
         </span>
         <span className="flex items-baseline gap-1.5 text-muted-foreground">
-          Edges<span className="text-amber-400 font-semibold tabular">{stats?.unexplained_edges ?? "—"}</span>
+          Edges<span className="text-foreground font-semibold tabular">{stats?.unexplained_edges ?? "—"}</span>
         </span>
         <span className="flex items-baseline gap-1.5 text-muted-foreground">
           Open<span className="text-foreground font-semibold tabular">{stats?.open_trades ?? "—"}</span>
@@ -251,7 +251,7 @@ export default function Dashboard() {
           Realized<span className={`font-semibold ${clsPnl(stats?.realized_pnl || 0)}`}>{stats ? fmt$(stats.realized_pnl ?? 0) : "—"}</span>
         </span>
         <span className="flex items-baseline gap-1.5 text-muted-foreground ml-auto">
-          Equity<span className="text-cyan-400 font-bold tabular text-sm">{stats ? fmt$(stats.account_equity ?? 1000) : "—"}</span>
+          Equity<span className="text-foreground font-bold tabular text-sm">{stats ? fmt$(stats.account_equity ?? 1000) : "—"}</span>
         </span>
       </div>
 
@@ -264,7 +264,7 @@ export default function Dashboard() {
             onClick={() => setTab(t.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px rounded-t-md
               ${tab === t.id
-                ? "border-cyan-400 text-cyan-400 bg-cyan-400/[0.06]"
+                ? "border-foreground text-foreground bg-white/[0.06]"
                 : "border-transparent text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/20"}`}
           >
             <t.Icon size={15} strokeWidth={2} className="shrink-0" />
@@ -293,9 +293,9 @@ export default function Dashboard() {
             {/* KPI row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard label="Active Markets" value={stats?.total_markets ?? "—"} />
-              <StatCard label="Signals (24h)" value={stats?.signals_24h ?? "—"} accent="text-amber-400" />
-              <StatCard label="Unexplained Edges" value={stats?.unexplained_edges ?? "—"} accent="text-amber-400" />
-              <StatCard label="Top Edge Score" value={stats?.top_edge_score?.toFixed(2) ?? "—"} accent="text-cyan-400" />
+              <StatCard label="Signals (24h)" value={stats?.signals_24h ?? "—"} accent="text-foreground" />
+              <StatCard label="Unexplained Edges" value={stats?.unexplained_edges ?? "—"} accent="text-foreground" />
+              <StatCard label="Top Edge Score" value={stats?.top_edge_score?.toFixed(2) ?? "—"} accent="text-foreground" />
             </div>
 
             {/* Filter bar */}
@@ -306,7 +306,7 @@ export default function Dashboard() {
                 value={marketFilter}
                 onChange={e => setMarketFilter(e.target.value)}
                 placeholder="Filter markets..."
-                className="flex-1 max-w-xs bg-muted text-sm text-foreground border border-border rounded-md px-3 py-1.5 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="flex-1 max-w-xs bg-muted text-sm text-foreground border border-border rounded-md px-3 py-1.5 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <span className="text-xs text-muted-foreground">{filteredMarkets.length} markets</span>
             </div>
@@ -395,7 +395,7 @@ export default function Dashboard() {
                           onClick={() => setSelectedOutcome(o.outcome_name)}
                           className={`text-xs px-2 py-0.5 rounded-full border transition-colors
                             ${selectedOutcome === o.outcome_name
-                              ? "border-cyan-400 text-cyan-400 bg-cyan-400/10"
+                              ? "border-foreground text-foreground bg-white/10"
                               : "border-border text-muted-foreground hover:border-slate-500"}`}
                         >
                           {o.outcome_name} — {fmtPct(o.current_price * 100)}
@@ -414,8 +414,8 @@ export default function Dashboard() {
                     <AreaChart data={priceHistoryQ.data}>
                       <defs>
                         <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#00d4ff" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#e5e5e5" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#e5e5e5" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 15% 18%)" />
@@ -426,7 +426,7 @@ export default function Dashboard() {
                         formatter={(v: any) => [`${Number(v).toFixed(1)}%`, "Probability"]}
                         labelFormatter={l => l?.slice(5, 16) || l}
                       />
-                      <Area type="monotone" dataKey="price" stroke="#00d4ff" strokeWidth={2} fill="url(#priceGrad)" dot={false} />
+                      <Area type="monotone" dataKey="price" stroke="#e5e5e5" strokeWidth={2} fill="url(#priceGrad)" dot={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
@@ -448,9 +448,9 @@ export default function Dashboard() {
                   onClick={() => setSignalFilter(f)}
                   className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors
                     ${signalFilter === f
-                      ? f === "unexplained" ? "border-amber-400 text-amber-400 bg-amber-400/10"
+                      ? f === "unexplained" ? "border-foreground text-foreground bg-white/10"
                         : f === "explained" ? "border-green-400 text-green-400 bg-green-400/10"
-                        : "border-cyan-400 text-cyan-400 bg-cyan-400/10"
+                        : "border-foreground text-foreground bg-white/10"
                       : "border-border text-muted-foreground hover:border-slate-500"}`}
                 >
                   {f === "all" ? "All" : f === "unexplained" ? "⚡ Unexplained Edge" : "✅ Explained"}
@@ -461,13 +461,13 @@ export default function Dashboard() {
                 <input
                   type="range" min="0" max="10" step="0.5" value={minEdge}
                   onChange={e => setMinEdge(parseFloat(e.target.value))}
-                  className="w-24 accent-cyan-400"
+                  className="w-24 accent-foreground"
                 />
-                <span className="text-xs text-cyan-400 tabular w-6">{minEdge}</span>
+                <span className="text-xs text-foreground tabular w-6">{minEdge}</span>
               </div>
               <button
                   onClick={() => setFilterTradable(f => !f)}
-                  className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterTradable ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40" : "border-border text-muted-foreground hover:text-foreground"}`}
+                  className={`text-xs px-3 py-1 rounded-full border transition-colors ${filterTradable ? "bg-white/10 text-foreground border-white/30" : "border-border text-muted-foreground hover:text-foreground"}`}
                   title="Show only economically tradable signals (hides sports, celebrity, novelty)"
                 >
                   {filterTradable ? "✓ " : ""}Tradable only
@@ -478,9 +478,9 @@ export default function Dashboard() {
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard label="Total Signals" value={signals.length} />
-              <StatCard label="Unexplained" value={signals.filter(s => s.explained === 0).length} accent="text-amber-400" />
+              <StatCard label="Unexplained" value={signals.filter(s => s.explained === 0).length} accent="text-foreground" />
               <StatCard label="Avg Change" value={signals.length ? `${(signals.reduce((s, x) => s + Math.abs(x.change_pp), 0) / signals.length).toFixed(1)}pp` : "—"} />
-              <StatCard label="Max Edge Score" value={signals.length ? Math.max(...signals.map(s => s.edge_score)).toFixed(2) : "—"} accent="text-cyan-400" />
+              <StatCard label="Max Edge Score" value={signals.length ? Math.max(...signals.map(s => s.edge_score)).toFixed(2) : "—"} accent="text-foreground" />
             </div>
 
             {/* Signals table */}
@@ -525,12 +525,12 @@ export default function Dashboard() {
                           {fmtChange(s.change_pp)}
                         </td>
                         <td className="px-3 py-2.5 text-center">
-                          <span className="text-xs font-bold text-cyan-400 tabular">{s.correlated_instrument}</span>
+                          <span className="text-xs font-bold text-foreground tabular">{s.correlated_instrument}</span>
                         </td>
                         <td className="px-3 py-2.5 text-center">
                           <span className="text-xs px-1.5 py-0.5 rounded text-slate-300 bg-slate-700/50 border border-slate-600 truncate max-w-[90px] block text-center" title={s.theme}>{(s.theme || "—").replace(/_/g, " ")}</span>
                         </td>
-                        <td className="px-3 py-2.5 text-right tabular font-bold text-amber-400 text-xs">{s.edge_score.toFixed(2)}</td>
+                        <td className="px-3 py-2.5 text-right tabular font-bold text-foreground text-xs">{s.edge_score.toFixed(2)}</td>
                         <td className="px-3 py-2.5 text-center">
                           {s.trade_eligible === 0 ? (
                             <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-800/80 text-slate-500 border border-slate-700" title="Sports / celebrity / novelty — not tradable">NOISE</span>
@@ -561,9 +561,9 @@ export default function Dashboard() {
             </div>
 
             {filteredSignals[0]?.news_summary && (
-              <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-4">
+              <div className="rounded-lg border border-border bg-white/[0.03] p-4">
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="text-xs font-semibold text-amber-400">Top Signal — News Context</p>
+                  <p className="text-xs font-semibold text-foreground">Top Signal — News Context</p>
                   {filteredSignals[0].news_check_method && (
                     <span className="text-xs text-muted-foreground">via {filteredSignals[0].news_check_method}</span>
                   )}
@@ -586,10 +586,10 @@ export default function Dashboard() {
               const equity       = 1000 + realizedSum;
               return (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <StatCard size="lg" label="Account Equity" value={fmt$(equity)} accent={equity >= 1000 ? "text-cyan-400" : "text-red-400"} sub="Base $1,000" />
+                  <StatCard size="lg" label="Account Equity" value={fmt$(equity)} accent={equity >= 1000 ? "text-foreground" : "text-red-400"} sub="Base $1,000" />
                   <StatCard size="lg" label="Realized P&L" value={fmt$(realizedSum)} accent={realizedSum >= 0 ? "text-green-400" : "text-red-400"} sub={`${closedTrades.length} closed`} />
                   <StatCard label="Unrealized P&L" value={fmt$(unrealSum)} accent={unrealSum >= 0 ? "text-green-400" : "text-red-400"} sub={`${openTrades.length} open`} />
-                  <StatCard label="Avg Edge at Entry" value={trades.length ? (trades.reduce((s, t) => s + t.edge_score, 0) / trades.length).toFixed(2) : "—"} accent="text-amber-400" />
+                  <StatCard label="Avg Edge at Entry" value={trades.length ? (trades.reduce((s, t) => s + t.edge_score, 0) / trades.length).toFixed(2) : "—"} accent="text-foreground" />
                 </div>
               );
             })()}
@@ -642,7 +642,7 @@ export default function Dashboard() {
                           </div>
                         )}
                         <div className="flex justify-between">
-                          <span>Edge Score</span><span className="tabular text-amber-400 font-medium">{t.edge_score.toFixed(2)}</span>
+                          <span>Edge Score</span><span className="tabular text-foreground font-medium">{t.edge_score.toFixed(2)}</span>
                         </div>
                         {t.trade_id && (
                           <div className="flex justify-between">
@@ -725,7 +725,7 @@ export default function Dashboard() {
                             ? fmt$(Number(t.realized_pnl))
                             : fmt$(t.unrealized_pnl)}
                         </td>
-                        <td className="px-3 py-2.5 text-right tabular text-amber-400 font-medium">{t.edge_score.toFixed(2)}</td>
+                        <td className="px-3 py-2.5 text-right tabular text-foreground font-medium">{t.edge_score.toFixed(2)}</td>
                         <td className="px-3 py-2.5 text-center">
                           {t.close_reason ? (
                             <span className={`text-xs px-2 py-0.5 rounded font-bold ${
@@ -801,7 +801,7 @@ export default function Dashboard() {
                               <XAxis dataKey="hour" tick={{ fill: "#64748b", fontSize: 9 }} />
                               <YAxis tick={{ fill: "#64748b", fontSize: 9 }} />
                               <Tooltip contentStyle={chartTooltipStyle} />
-                              <Bar dataKey="count" fill="#f59e0b" radius={[2,2,0,0]} />
+                              <Bar dataKey="count" fill="#d4d4d4" radius={[2,2,0,0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -844,7 +844,7 @@ export default function Dashboard() {
                             <XAxis type="number" tick={{ fill: "#64748b", fontSize: 9 }} />
                             <YAxis type="category" dataKey="correlated_instrument" tick={{ fill: "#94a3b8", fontSize: 9 }} width={35} />
                             <Tooltip contentStyle={chartTooltipStyle} />
-                            <Bar dataKey="edge_score" fill="#f59e0b" radius={[0,2,2,0]} />
+                            <Bar dataKey="edge_score" fill="#d4d4d4" radius={[0,2,2,0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -862,7 +862,7 @@ export default function Dashboard() {
                         contentStyle={chartTooltipStyle}
                         formatter={(v:any, name:string) => [name === "pnl" ? `$${Number(v).toFixed(2)}` : v, name === "pnl" ? "P&L" : "Edge Score"]}
                       />
-                      <Scatter data={scatterData} fill="#00d4ff" opacity={0.8} />
+                      <Scatter data={scatterData} fill="#e5e5e5" opacity={0.8} />
                     </ScatterChart>
                   </ResponsiveContainer>
                 )}
@@ -898,9 +898,9 @@ export default function Dashboard() {
                               {(t.theme || "—").replace(/_/g, " ")}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-right tabular text-amber-400">{t.signals_24h}</td>
+                          <td className="px-3 py-2 text-right tabular text-foreground">{t.signals_24h}</td>
                           <td className="px-3 py-2 text-right tabular text-muted-foreground">{t.total_trades}</td>
-                          <td className="px-3 py-2 text-right tabular text-cyan-400">{t.open_trades}</td>
+                          <td className="px-3 py-2 text-right tabular text-foreground">{t.open_trades}</td>
                           <td className={`px-3 py-2 text-right tabular font-bold ${Number(t.realized_pnl) >= 0 ? "text-green-400" : "text-red-400"}`}>
                             {Number(t.realized_pnl) >= 0 ? "+" : ""}{Number(t.realized_pnl).toFixed(2)}
                           </td>
