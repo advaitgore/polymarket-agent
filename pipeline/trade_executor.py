@@ -196,10 +196,14 @@ def get_stock_price(symbol: str) -> Optional[float]:
         return None
 
 
-def get_stock_price_with_fallback(symbol: str) -> float:
+def get_stock_price_with_fallback(symbol: str) -> Optional[float]:
     """
-    Get real stock price; fall back to last known cache value or a
-    reasonable default if Yahoo is unreachable.
+    Get real stock price; fall back to the secondary Yahoo endpoint, then the
+    last known cache value. Returns None when no real price is available.
+
+    Callers MUST handle None by skipping the action this cycle. There is no
+    synthetic default price: a hardcoded fallback (previously 100.0) marked a
+    $543 NOC position at $100 on 2026-11-23 and booked a fake -$366 loss.
     """
     price = get_stock_price(symbol)
     if price is not None:
@@ -220,9 +224,14 @@ def get_stock_price_with_fallback(symbol: str) -> float:
     if symbol in _PRICE_CACHE:
         logger.warning(f"Using stale cache price for {symbol}: ${_PRICE_CACHE[symbol]:.2f}")
         return _PRICE_CACHE[symbol]
-    # Hard fallback — will prevent trade sizing but won't crash
-    logger.error(f"No price available for {symbol} — using 100.0 fallback")
-    return 100.0
+    logger.error(f"No price available for {symbol} - returning None (no synthetic fallback)")
+    return None
+
+
+# A mark more than this far from the previous stored mark is treated as bad
+# data and skipped for the cycle. Marks refresh every 15 min during market
+# hours; the largest real move seen across a weekend was ~15% (ETHA, Nov 2026).
+MAX_MARK_JUMP_FRACTION = 0.35
 
 
 def invalidate_price_cache():
@@ -883,6 +892,9 @@ def place_paper_trade(signal: Dict) -> Optional[Dict]:
 
     # ── Real stock entry price ─────────────────────────────────────────────
     entry = get_stock_price_with_fallback(symbol)
+    if entry is None:
+        logger.error(f"Trade skipped for {symbol}: no real price available")
+        return None
     logger.info(f"Stock price fetch: {symbol} = ${entry:.2f}")
 
     sl_dist   = compute_atr_stop_distance(symbol, entry)
@@ -1106,6 +1118,22 @@ def update_mark_prices():
 
         # ── Real stock price mark ──────────────────────────────────────────
         mark = get_stock_price_with_fallback(symbol)
+        if mark is None:
+            logger.error(
+                f"Mark skipped {symbol} [{trade_id}]: no real price - "
+                f"no SL/TP/resolution/time checks this cycle, retrying next cycle"
+            )
+            continue
+
+        prev_mark = _safe_float(row.get("mark_price"), None)
+        if prev_mark and prev_mark > 0 and abs(mark / prev_mark - 1.0) > MAX_MARK_JUMP_FRACTION:
+            logger.error(
+                f"Mark skipped {symbol} [{trade_id}]: price {mark:.2f} is "
+                f"{(mark / prev_mark - 1.0) * 100:+.1f}% vs previous mark {prev_mark:.2f} "
+                f"(limit {MAX_MARK_JUMP_FRACTION * 100:.0f}%) - treating as bad data"
+            )
+            continue
+
         upnl = round((mark - entry) * qty * side_mult, 4)
 
         df.loc[idx, "mark_price"]     = round(mark, 4)
