@@ -2,7 +2,7 @@
   "_meta": {
     "description": "Dynamic weight table for theme-ticker mappings. Managed by adaptive_mapper.py. Higher weight = preferred primary ticker for that theme. Weights start at 1.0 (equal) and are adjusted based on realized P&L outcomes from trades.csv. Weights are normalized per theme before selection. Never drop below MIN_WEIGHT (0.1) or exceed MAX_WEIGHT (5.0).",
     "version": "1.0",
-    "last_updated": "2026-11-12T14:30:27.773621+00:00",
+    "last_updated": "2026-11-23T14:30:46.181165+00:00",
     "cycles_since_last_adapt": 0,
     "adapt_every_n_cycles": 48,
     "min_weight": 0.1,
@@ -11,10 +11,10 @@
   },
   "weights": {
     "defense_geopolitics": {
-      "LMT": 0.087,
+      "LMT": 0.0869,
       "NOC": 1.0,
-      "RTX": 0.0003,
-      "ITA": 1.3
+      "RTX": 0.0001,
+      "ITA": 0.4887
     },
     "tech_ai": {
       "QQQ": 1.0,
@@ -40,453 +40,6 @@
     }
   },
   "performance_log": [
-    {
-      "timestamp": "2026-06-26T13:30:09.930716+00:00",
-      "n_adjustments": 3,
-      "stats_by_theme_ticker": {
-        "tech_ai/QQQ": {
-          "pnl": 40.7473,
-          "closed_trades": 1
-        },
-        "crypto_major/ETHA": {
-          "pnl": 1.385,
-          "closed_trades": 1
-        },
-        "energy_geopolitics/XLE": {
-          "pnl": -33.6242,
-          "closed_trades": 4
-        },
-        "crypto_major/IBIT": {
-          "pnl": 9.5464,
-          "closed_trades": 1
-        },
-        "us_politics_macro/SPY": {
-          "pnl": 38.5672,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/LMT": {
-          "pnl": -2.2283,
-          "closed_trades": 3
-        },
-        "global_macro/TLT": {
-          "pnl": -5.3793,
-          "closed_trades": 3
-        },
-        "tech_ai/GOOGL": {
-          "pnl": 7.6664,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/NOC": {
-          "pnl": 2.8418,
-          "closed_trades": 1
-        }
-      },
-      "pnl_by_theme_ticker": {
-        "tech_ai/QQQ": 40.7473,
-        "crypto_major/ETHA": 1.385,
-        "energy_geopolitics/XLE": -33.6242,
-        "crypto_major/IBIT": 9.5464,
-        "us_politics_macro/SPY": 38.5672,
-        "defense_geopolitics/LMT": -2.2283,
-        "global_macro/TLT": -5.3793,
-        "tech_ai/GOOGL": 7.6664,
-        "defense_geopolitics/NOC": 2.8418
-      },
-      "top_tickers_after": {
-        "energy_oil_risk": "XLE",
-        "defense_geopolitics": "NOC",
-        "us_elections_policy": "XLF",
-        "macro_fed_path": "TLT",
-        "tech_ai": "QQQ",
-        "crypto": "IBIT",
-        "us_politics_macro": "SPY",
-        "crypto_major": "ETHA",
-        "energy_geopolitics": "XLE",
-        "global_macro": "TLT"
-      }
-    },
-    {
-      "timestamp": "2026-06-29T13:30:18.515168+00:00",
-      "n_adjustments": 4,
-      "stats_by_theme_ticker": {
-        "tech_ai/QQQ": {
-          "pnl": 40.7473,
-          "closed_trades": 1
-        },
-        "crypto_major/ETHA": {
-          "pnl": 1.385,
-          "closed_trades": 1
-        },
-        "energy_geopolitics/XLE": {
-          "pnl": -33.6242,
-          "closed_trades": 4
-        },
-        "crypto_major/IBIT": {
-          "pnl": 9.5464,
-          "closed_trades": 1
-        },
-        "us_politics_macro/SPY": {
-          "pnl": 38.5672,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/LMT": {
-          "pnl": -2.2283,
-          "closed_trades": 3
-        },
-        "global_macro/TLT": {
-          "pnl": -5.3793,
-          "closed_trades": 3
-        },
-        "tech_ai/GOOGL": {
-          "pnl": 7.6664,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/NOC": {
-          "pnl": 27.9914,
-          "closed_trades": 2
-        }
-      },
-      "pnl_by_theme_ticker": {
-        "tech_ai/QQQ": 40.7473,
-        "crypto_major/ETHA": 1.385,
-        "energy_geopolitics/XLE": -33.6242,
-        "crypto_major/IBIT": 9.5464,
-        "us_politics_macro/SPY": 38.5672,
-        "defense_geopolitics/LMT": -2.2283,
-        "global_macro/TLT": -5.3793,
-        "tech_ai/GOOGL": 7.6664,
-        "defense_geopolitics/NOC": 27.9914
-      },
-      "top_tickers_after": {
-        "energy_oil_risk": "XLE",
-        "defense_geopolitics": "NOC",
-        "us_elections_policy": "XLF",
-        "macro_fed_path": "TLT",
-        "tech_ai": "QQQ",
-        "crypto": "IBIT",
-        "us_politics_macro": "SPY",
-        "crypto_major": "ETHA",
-        "energy_geopolitics": "XLE",
-        "global_macro": "TLT"
-      }
-    },
-    {
-      "timestamp": "2026-06-30T13:30:12.760771+00:00",
-      "n_adjustments": 4,
-      "stats_by_theme_ticker": {
-        "tech_ai/QQQ": {
-          "pnl": 40.7473,
-          "closed_trades": 1
-        },
-        "crypto_major/ETHA": {
-          "pnl": 1.385,
-          "closed_trades": 1
-        },
-        "energy_geopolitics/XLE": {
-          "pnl": -33.6242,
-          "closed_trades": 4
-        },
-        "crypto_major/IBIT": {
-          "pnl": 9.5464,
-          "closed_trades": 1
-        },
-        "us_politics_macro/SPY": {
-          "pnl": 38.5672,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/LMT": {
-          "pnl": -2.2283,
-          "closed_trades": 3
-        },
-        "global_macro/TLT": {
-          "pnl": -11.2914,
-          "closed_trades": 4
-        },
-        "tech_ai/GOOGL": {
-          "pnl": 7.6664,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/NOC": {
-          "pnl": 27.9914,
-          "closed_trades": 2
-        }
-      },
-      "pnl_by_theme_ticker": {
-        "tech_ai/QQQ": 40.7473,
-        "crypto_major/ETHA": 1.385,
-        "energy_geopolitics/XLE": -33.6242,
-        "crypto_major/IBIT": 9.5464,
-        "us_politics_macro/SPY": 38.5672,
-        "defense_geopolitics/LMT": -2.2283,
-        "global_macro/TLT": -11.2914,
-        "tech_ai/GOOGL": 7.6664,
-        "defense_geopolitics/NOC": 27.9914
-      },
-      "top_tickers_after": {
-        "energy_oil_risk": "XLE",
-        "defense_geopolitics": "NOC",
-        "us_elections_policy": "XLF",
-        "macro_fed_path": "TLT",
-        "tech_ai": "QQQ",
-        "crypto": "IBIT",
-        "us_politics_macro": "SPY",
-        "crypto_major": "ETHA",
-        "energy_geopolitics": "XLE",
-        "global_macro": "TLT"
-      }
-    },
-    {
-      "timestamp": "2026-07-01T13:30:14.307100+00:00",
-      "n_adjustments": 4,
-      "stats_by_theme_ticker": {
-        "tech_ai/QQQ": {
-          "pnl": 40.7473,
-          "closed_trades": 1
-        },
-        "crypto_major/ETHA": {
-          "pnl": 1.385,
-          "closed_trades": 1
-        },
-        "energy_geopolitics/XLE": {
-          "pnl": -33.6242,
-          "closed_trades": 4
-        },
-        "crypto_major/IBIT": {
-          "pnl": 9.5464,
-          "closed_trades": 1
-        },
-        "us_politics_macro/SPY": {
-          "pnl": 38.5672,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/LMT": {
-          "pnl": -2.2283,
-          "closed_trades": 3
-        },
-        "global_macro/TLT": {
-          "pnl": -11.2914,
-          "closed_trades": 4
-        },
-        "tech_ai/GOOGL": {
-          "pnl": 7.6664,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/NOC": {
-          "pnl": 27.9914,
-          "closed_trades": 2
-        }
-      },
-      "pnl_by_theme_ticker": {
-        "tech_ai/QQQ": 40.7473,
-        "crypto_major/ETHA": 1.385,
-        "energy_geopolitics/XLE": -33.6242,
-        "crypto_major/IBIT": 9.5464,
-        "us_politics_macro/SPY": 38.5672,
-        "defense_geopolitics/LMT": -2.2283,
-        "global_macro/TLT": -11.2914,
-        "tech_ai/GOOGL": 7.6664,
-        "defense_geopolitics/NOC": 27.9914
-      },
-      "top_tickers_after": {
-        "energy_oil_risk": "XLE",
-        "defense_geopolitics": "NOC",
-        "us_elections_policy": "XLF",
-        "macro_fed_path": "TLT",
-        "tech_ai": "QQQ",
-        "crypto": "IBIT",
-        "us_politics_macro": "SPY",
-        "crypto_major": "ETHA",
-        "energy_geopolitics": "XLE",
-        "global_macro": "TLT"
-      }
-    },
-    {
-      "timestamp": "2026-07-02T13:30:18.880911+00:00",
-      "n_adjustments": 4,
-      "stats_by_theme_ticker": {
-        "tech_ai/QQQ": {
-          "pnl": 40.7473,
-          "closed_trades": 1
-        },
-        "crypto_major/ETHA": {
-          "pnl": 1.385,
-          "closed_trades": 1
-        },
-        "energy_geopolitics/XLE": {
-          "pnl": -33.6242,
-          "closed_trades": 4
-        },
-        "crypto_major/IBIT": {
-          "pnl": 9.5464,
-          "closed_trades": 1
-        },
-        "us_politics_macro/SPY": {
-          "pnl": 38.5672,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/LMT": {
-          "pnl": -2.2283,
-          "closed_trades": 3
-        },
-        "global_macro/TLT": {
-          "pnl": -11.2914,
-          "closed_trades": 4
-        },
-        "tech_ai/GOOGL": {
-          "pnl": 7.6664,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/NOC": {
-          "pnl": 27.9914,
-          "closed_trades": 2
-        }
-      },
-      "pnl_by_theme_ticker": {
-        "tech_ai/QQQ": 40.7473,
-        "crypto_major/ETHA": 1.385,
-        "energy_geopolitics/XLE": -33.6242,
-        "crypto_major/IBIT": 9.5464,
-        "us_politics_macro/SPY": 38.5672,
-        "defense_geopolitics/LMT": -2.2283,
-        "global_macro/TLT": -11.2914,
-        "tech_ai/GOOGL": 7.6664,
-        "defense_geopolitics/NOC": 27.9914
-      },
-      "top_tickers_after": {
-        "energy_oil_risk": "XLE",
-        "defense_geopolitics": "NOC",
-        "us_elections_policy": "XLF",
-        "macro_fed_path": "TLT",
-        "tech_ai": "QQQ",
-        "crypto": "IBIT",
-        "us_politics_macro": "SPY",
-        "crypto_major": "ETHA",
-        "energy_geopolitics": "XLE",
-        "global_macro": "TLT"
-      }
-    },
-    {
-      "timestamp": "2026-07-03T13:30:18.663569+00:00",
-      "n_adjustments": 4,
-      "stats_by_theme_ticker": {
-        "tech_ai/QQQ": {
-          "pnl": 40.7473,
-          "closed_trades": 1
-        },
-        "crypto_major/ETHA": {
-          "pnl": 1.385,
-          "closed_trades": 1
-        },
-        "energy_geopolitics/XLE": {
-          "pnl": -33.6242,
-          "closed_trades": 4
-        },
-        "crypto_major/IBIT": {
-          "pnl": 9.5464,
-          "closed_trades": 1
-        },
-        "us_politics_macro/SPY": {
-          "pnl": 38.5672,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/LMT": {
-          "pnl": -2.2283,
-          "closed_trades": 3
-        },
-        "global_macro/TLT": {
-          "pnl": -11.2914,
-          "closed_trades": 4
-        },
-        "tech_ai/GOOGL": {
-          "pnl": 7.6664,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/NOC": {
-          "pnl": 27.9914,
-          "closed_trades": 2
-        }
-      },
-      "pnl_by_theme_ticker": {
-        "tech_ai/QQQ": 40.7473,
-        "crypto_major/ETHA": 1.385,
-        "energy_geopolitics/XLE": -33.6242,
-        "crypto_major/IBIT": 9.5464,
-        "us_politics_macro/SPY": 38.5672,
-        "defense_geopolitics/LMT": -2.2283,
-        "global_macro/TLT": -11.2914,
-        "tech_ai/GOOGL": 7.6664,
-        "defense_geopolitics/NOC": 27.9914
-      },
-      "top_tickers_after": {
-        "defense_geopolitics": "NOC",
-        "tech_ai": "QQQ",
-        "us_politics_macro": "SPY",
-        "crypto_major": "ETHA",
-        "energy_geopolitics": "XLE",
-        "global_macro": "TLT"
-      }
-    },
-    {
-      "timestamp": "2026-07-06T13:30:08.701679+00:00",
-      "n_adjustments": 4,
-      "stats_by_theme_ticker": {
-        "tech_ai/QQQ": {
-          "pnl": 40.7473,
-          "closed_trades": 1
-        },
-        "crypto_major/ETHA": {
-          "pnl": 1.385,
-          "closed_trades": 1
-        },
-        "energy_geopolitics/XLE": {
-          "pnl": -33.6242,
-          "closed_trades": 4
-        },
-        "crypto_major/IBIT": {
-          "pnl": 9.5464,
-          "closed_trades": 1
-        },
-        "us_politics_macro/SPY": {
-          "pnl": 38.5672,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/LMT": {
-          "pnl": -2.2283,
-          "closed_trades": 3
-        },
-        "global_macro/TLT": {
-          "pnl": -11.2914,
-          "closed_trades": 4
-        },
-        "tech_ai/GOOGL": {
-          "pnl": 7.6664,
-          "closed_trades": 1
-        },
-        "defense_geopolitics/NOC": {
-          "pnl": 27.9914,
-          "closed_trades": 2
-        }
-      },
-      "pnl_by_theme_ticker": {
-        "tech_ai/QQQ": 40.7473,
-        "crypto_major/ETHA": 1.385,
-        "energy_geopolitics/XLE": -33.6242,
-        "crypto_major/IBIT": 9.5464,
-        "us_politics_macro/SPY": 38.5672,
-        "defense_geopolitics/LMT": -2.2283,
-        "global_macro/TLT": -11.2914,
-        "tech_ai/GOOGL": 7.6664,
-        "defense_geopolitics/NOC": 27.9914
-      },
-      "top_tickers_after": {
-        "defense_geopolitics": "NOC",
-        "tech_ai": "QQQ",
-        "us_politics_macro": "SPY",
-        "crypto_major": "ETHA",
-        "energy_geopolitics": "XLE",
-        "global_macro": "TLT"
-      }
-    },
     {
       "timestamp": "2026-07-07T13:30:18.981027+00:00",
       "n_adjustments": 4,
@@ -6159,6 +5712,444 @@
         "energy_geopolitics": "XLE",
         "global_macro": "TLT"
       }
+    },
+    {
+      "timestamp": "2026-11-13T14:30:22.327420+00:00",
+      "n_adjustments": 7,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 28.1334,
+          "closed_trades": 5
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -33.6242,
+          "closed_trades": 4
+        },
+        "crypto_major/IBIT": {
+          "pnl": 23.4087,
+          "closed_trades": 11
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 34.0352,
+          "closed_trades": 5
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -17.3561,
+          "closed_trades": 5
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/NOC": {
+          "pnl": 40.4881,
+          "closed_trades": 11
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 28.1334,
+        "energy_geopolitics/XLE": -33.6242,
+        "crypto_major/IBIT": 23.4087,
+        "us_politics_macro/SPY": 34.0352,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -17.3561,
+        "tech_ai/GOOGL": 7.6664,
+        "defense_geopolitics/NOC": 40.4881
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "ITA",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-11-16T14:30:20.927385+00:00",
+      "n_adjustments": 7,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 28.1334,
+          "closed_trades": 5
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -33.6242,
+          "closed_trades": 4
+        },
+        "crypto_major/IBIT": {
+          "pnl": 49.3078,
+          "closed_trades": 12
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 34.0352,
+          "closed_trades": 5
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -17.3561,
+          "closed_trades": 5
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/NOC": {
+          "pnl": 40.4881,
+          "closed_trades": 11
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 28.1334,
+        "energy_geopolitics/XLE": -33.6242,
+        "crypto_major/IBIT": 49.3078,
+        "us_politics_macro/SPY": 34.0352,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -17.3561,
+        "tech_ai/GOOGL": 7.6664,
+        "defense_geopolitics/NOC": 40.4881
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-11-17T14:30:30.018367+00:00",
+      "n_adjustments": 7,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 28.1334,
+          "closed_trades": 5
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -33.6242,
+          "closed_trades": 4
+        },
+        "crypto_major/IBIT": {
+          "pnl": 49.3078,
+          "closed_trades": 12
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 34.0352,
+          "closed_trades": 5
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -17.3561,
+          "closed_trades": 5
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/NOC": {
+          "pnl": 40.4881,
+          "closed_trades": 11
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 28.1334,
+        "energy_geopolitics/XLE": -33.6242,
+        "crypto_major/IBIT": 49.3078,
+        "us_politics_macro/SPY": 34.0352,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -17.3561,
+        "tech_ai/GOOGL": 7.6664,
+        "defense_geopolitics/NOC": 40.4881
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-11-18T14:30:30.869954+00:00",
+      "n_adjustments": 7,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 28.1334,
+          "closed_trades": 5
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -33.6242,
+          "closed_trades": 4
+        },
+        "crypto_major/IBIT": {
+          "pnl": 49.3078,
+          "closed_trades": 12
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 34.0352,
+          "closed_trades": 5
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -17.3561,
+          "closed_trades": 5
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/NOC": {
+          "pnl": 40.4881,
+          "closed_trades": 11
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 28.1334,
+        "energy_geopolitics/XLE": -33.6242,
+        "crypto_major/IBIT": 49.3078,
+        "us_politics_macro/SPY": 34.0352,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -17.3561,
+        "tech_ai/GOOGL": 7.6664,
+        "defense_geopolitics/NOC": 40.4881
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-11-19T14:30:22.810433+00:00",
+      "n_adjustments": 7,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 28.1334,
+          "closed_trades": 5
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -33.6242,
+          "closed_trades": 4
+        },
+        "crypto_major/IBIT": {
+          "pnl": 49.3078,
+          "closed_trades": 12
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 34.0352,
+          "closed_trades": 5
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -17.3561,
+          "closed_trades": 5
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/NOC": {
+          "pnl": 40.4881,
+          "closed_trades": 11
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 28.1334,
+        "energy_geopolitics/XLE": -33.6242,
+        "crypto_major/IBIT": 49.3078,
+        "us_politics_macro/SPY": 34.0352,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -17.3561,
+        "tech_ai/GOOGL": 7.6664,
+        "defense_geopolitics/NOC": 40.4881
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-11-20T14:30:24.227240+00:00",
+      "n_adjustments": 7,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 28.1334,
+          "closed_trades": 5
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -33.6242,
+          "closed_trades": 4
+        },
+        "crypto_major/IBIT": {
+          "pnl": 49.3078,
+          "closed_trades": 12
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 34.0352,
+          "closed_trades": 5
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -17.3561,
+          "closed_trades": 5
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/NOC": {
+          "pnl": 40.4881,
+          "closed_trades": 11
+        },
+        "defense_geopolitics/ITA": {
+          "pnl": -24.0272,
+          "closed_trades": 1
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 28.1334,
+        "energy_geopolitics/XLE": -33.6242,
+        "crypto_major/IBIT": 49.3078,
+        "us_politics_macro/SPY": 34.0352,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -17.3561,
+        "tech_ai/GOOGL": 7.6664,
+        "defense_geopolitics/NOC": 40.4881,
+        "defense_geopolitics/ITA": -24.0272
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      }
+    },
+    {
+      "timestamp": "2026-11-23T14:30:46.181165+00:00",
+      "n_adjustments": 7,
+      "stats_by_theme_ticker": {
+        "tech_ai/QQQ": {
+          "pnl": 40.7473,
+          "closed_trades": 1
+        },
+        "crypto_major/ETHA": {
+          "pnl": 17.9717,
+          "closed_trades": 6
+        },
+        "energy_geopolitics/XLE": {
+          "pnl": -33.6242,
+          "closed_trades": 4
+        },
+        "crypto_major/IBIT": {
+          "pnl": 49.3078,
+          "closed_trades": 12
+        },
+        "us_politics_macro/SPY": {
+          "pnl": 34.0352,
+          "closed_trades": 5
+        },
+        "defense_geopolitics/LMT": {
+          "pnl": -2.2283,
+          "closed_trades": 3
+        },
+        "global_macro/TLT": {
+          "pnl": -17.3561,
+          "closed_trades": 5
+        },
+        "tech_ai/GOOGL": {
+          "pnl": 7.6664,
+          "closed_trades": 1
+        },
+        "defense_geopolitics/NOC": {
+          "pnl": -326.1178,
+          "closed_trades": 12
+        },
+        "defense_geopolitics/ITA": {
+          "pnl": -24.0272,
+          "closed_trades": 1
+        }
+      },
+      "pnl_by_theme_ticker": {
+        "tech_ai/QQQ": 40.7473,
+        "crypto_major/ETHA": 17.9717,
+        "energy_geopolitics/XLE": -33.6242,
+        "crypto_major/IBIT": 49.3078,
+        "us_politics_macro/SPY": 34.0352,
+        "defense_geopolitics/LMT": -2.2283,
+        "global_macro/TLT": -17.3561,
+        "tech_ai/GOOGL": 7.6664,
+        "defense_geopolitics/NOC": -326.1178,
+        "defense_geopolitics/ITA": -24.0272
+      },
+      "top_tickers_after": {
+        "defense_geopolitics": "NOC",
+        "tech_ai": "QQQ",
+        "us_politics_macro": "SPY",
+        "crypto_major": "ETHA",
+        "energy_geopolitics": "XLE",
+        "global_macro": "TLT"
+      },
+      "_incident_note": "NOC stats in this entry include the 100.0-fallback glitch row 6a6d6030. Fixed 20261123T151819Z: defense weights recomputed as if NOC step were x1.15. Pre-fix weights: {'LMT': 0.1176, 'NOC': 1.0, 'RTX': 0.0002, 'ITA': 0.6612}"
     }
   ]
 }
